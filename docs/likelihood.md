@@ -189,6 +189,25 @@ assert jnp.allclose(jax.jit(unit_rate.log_likelihood)(windowed), expected)
 windowed_ll
 ```
 
+The same observations can be constructed with censoring flags. `time` is
+the interval's lower endpoint and `time2` is its upper endpoint; `time2` is
+used only for interval-censored rows. A row with all flags false is exact.
+The truncation bounds apply in the same way as in the bounds form:
+
+```{code-cell} ipython3
+windowed_flags = survjax.SurvivalData(
+    [2.0, 3.0, 3.0, 2.0],
+    right_censored=[False, True, False, False],
+    left_censored=[False, False, True, False],
+    interval_censored=[False, False, False, True],
+    time2=[jnp.nan, jnp.nan, jnp.nan, 5.0],
+    left_trunc=1.0,
+    right_trunc=4.0,
+)
+windowed_flags.issues.raise_if_invalid()
+assert jnp.allclose(unit_rate.log_likelihood(windowed_flags), expected)
+```
+
 Bounds can vary by row and follow the constructor's broadcasting rules.
 Right censoring before entry ($c<L$), an exact event outside $(L,U]$, and an
 empty intersection are invalid observations and produce NaN. An empty
