@@ -190,8 +190,9 @@ windowed_ll
 ```
 
 The same observations can be constructed with censoring flags. `time` is
-the interval's lower endpoint and `time2` is its upper endpoint; `time2` is
-used only for interval-censored rows. A row with all flags false is exact.
+the exact event time, the one-sided censoring time, or the lower endpoint of
+an interval. `time2` is the upper endpoint and is used only for
+interval-censored rows. A row with all flags false is exact.
 The truncation bounds apply in the same way as in the bounds form:
 
 ```{code-cell} ipython3

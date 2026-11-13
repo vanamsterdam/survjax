@@ -1,6 +1,6 @@
 # DOCS.TRUNC.FLAGS handoff
 
-Independent review: round 1/3
+Independent review: round 2/3
 
 Read docs/likelihood.md's censored and truncated example first, then this
 step's plan. The flags represent the same four sets and inclusion window as
@@ -11,3 +11,6 @@ exponential algebra (spec sections 3 and 6). scripts/build_docs.sh succeeded
 in both dtype modes. scripts/check.sh --fast passed all gates; the existing
 spec test for PH grid values emitted two NumPy runtime warnings. No standalone
 tests or public API changes. No known uncertainty or remaining sub-steps.
+
+Round 1 F-1: clarified the meaning of `time` for each observation kind.
+N-1 required no action; the example intentionally builds on the preceding cell.
