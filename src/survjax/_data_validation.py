@@ -82,7 +82,8 @@ def indicator(
         )
     raw = jnp.broadcast_to(raw, shape)
     invalid = (raw != 0) & (raw != 1)
-    return raw == 1, invalid
+    # spec 3.2/7.2: avoid extra specialization on weakly typed boolean masks.
+    return jnp.asarray(raw == 1, dtype=bool), invalid
 
 
 def row_issues(

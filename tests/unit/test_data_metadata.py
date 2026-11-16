@@ -252,3 +252,31 @@ def test_static_flags_control_compilation_reuse() -> None:
     total(full)
     total(jax.jit(SurvivalData)(jnp.asarray([1.0, 2.0])))
     assert len(traces) == 3
+
+
+@pytest.mark.parametrize("bounds", [False, True], ids=["event", "bounds"])
+def test_traced_indicator_masks_reuse_eager_compilation(bounds: bool) -> None:
+    """Spec 3.2/7.2: equivalent normalized masks keep the same abstract dtype."""
+    times = jnp.asarray([1.0, 2.0, 0.0 if bounds else 3.0, 1.0])
+    events = jnp.asarray([True, False, False, False])
+
+    def build(t: jax.Array, e: jax.Array) -> SurvivalData:
+        if bounds:
+            return SurvivalData.from_bounds(t, [1.0, np.inf, 3.0, 4.0], exact=e)
+        return SurvivalData(t, e)
+
+    eager = (
+        build(times, events) if bounds else SurvivalData(times, right_censored=~events)
+    )
+    traced = jax.jit(build)(times, events)
+    traces = []
+
+    @jax.jit
+    def total(data: SurvivalData) -> jax.Array:
+        traces.append(None)
+        return data.lower.sum()
+
+    assert not traced.exact.weak_type
+    total(eager)
+    total(traced)
+    assert len(traces) == 1
