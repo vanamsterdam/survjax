@@ -11,6 +11,7 @@ import shlex
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import jax
@@ -23,6 +24,12 @@ SEED = 20261116
 TOL = runpy.run_path(
     str(Path(__file__).resolve().parents[1] / "tests/impl_tolerances.py")
 )
+
+
+@survjax.register_family
+@dataclass(frozen=True)
+class UnsharedPH(survjax.ProportionalHazards):
+    """Inherited PH primitives through the unchanged generic evaluator."""
 
 
 def _timed(call):
@@ -106,9 +113,10 @@ def _objective(route, operation, p, data, arm):
             values = log_s if operation == "log_survival" else density
     else:
         baseline = survjax.Weibull(shape=k, scale=b)
+        ph_type = UnsharedPH if route == "ph_generic" else survjax.ProportionalHazards
         dist = (
-            survjax.ProportionalHazards(baseline=baseline, log_hazard_ratio=eta)
-            if route == "ph"
+            ph_type(baseline=baseline, log_hazard_ratio=eta)
+            if route in ("ph", "ph_generic")
             else survjax.Weibull(shape=k, scale=b * jnp.exp(-eta / k))
         )
         values = (
@@ -123,6 +131,8 @@ def _measure(n, mix, operation, dtype, warmups, repeats):
     (data, arm), preparation = _timed(lambda: _inputs(n, mix, dtype))
     p = jnp.asarray([np.log(1.3), np.log(2.0), 0.25], dtype=dtype)
     routes = ["ph", "equivalent"]
+    if operation == "likelihood":
+        routes.insert(1, "ph_generic")
     if mix in ("exact", "exact_right"):
         routes.append("unchecked")
     cases = []
@@ -210,9 +220,14 @@ def _main():
     dtype = np.float64 if jax.config.x64_enabled else np.float32
     processor = platform.processor()
     if sys.platform == "darwin":
-        processor = subprocess.check_output(
-            ["sysctl", "-n", "machdep.cpu.brand_string"], text=True
-        ).strip()
+        try:
+            processor = subprocess.check_output(
+                ["sysctl", "-n", "machdep.cpu.brand_string"],
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).strip()
+        except (OSError, subprocess.CalledProcessError):
+            pass  # Restricted environments retain platform.processor() metadata.
     report = {
         "utc": datetime.datetime.now(datetime.UTC).isoformat(),
         "revision": subprocess.check_output(

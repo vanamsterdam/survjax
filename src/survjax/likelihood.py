@@ -8,6 +8,7 @@ from survjax._data_validation import current_field_issues
 from survjax._likelihood_parameters import stop_invalid_gradients
 from survjax.data import SurvivalData
 from survjax.distributions.base import SurvivalDistribution
+from survjax.distributions.wrappers import ProportionalHazards
 
 
 def _unusable_data_rows(data: SurvivalData, shape: tuple[int, ...]) -> jax.Array:
@@ -41,6 +42,23 @@ def _evaluate(
     # When all are absent, spec 2 gives Z=1 and right-row mass S(c), including
     # any cure mass at infinity. No family-type or proper-family assumption.
     untruncated_exact_right = not any(data._may_contain[2:6])
+    if (
+        type(prepared) is ProportionalHazards
+        and untruncated_exact_right
+        and all(data._may_contain[:2])
+    ):
+        # spec 4.4/7.2: PH log f = log h + log S. Share log S across
+        # active exact/right rows, keeping inactive hazard inputs interior.
+        # Concrete type preserves arbitrary subclasses' density overrides.
+        survival_time = jnp.where(~bad, time, 0.0)
+        log_survival = prepared.log_survival(survival_time)
+        reference = jax.lax.stop_gradient(
+            jnp.asarray(prepared.reference_time(), dtype=common)
+        )
+        density_time = jnp.where(~bad & exact_rows, time, reference)
+        log_hazard = prepared.log_hazard(density_time)
+        values = log_survival + jnp.where(exact_rows, log_hazard, 0.0)
+        return jnp.where(bad, jnp.nan, jnp.asarray(values, dtype=common))
     # Zeros are placeholders for omitted pieces, never active row contributions;
     # the final exact_rows mask selects the appropriate piece for each row.
     interval = jnp.zeros(bad.shape, dtype=common)

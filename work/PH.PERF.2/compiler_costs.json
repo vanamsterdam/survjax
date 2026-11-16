@@ -1,0 +1,19 @@
+{
+  "dtype": "float64",
+  "n": 30000,
+  "mix": "exact_right",
+  "seed": 20261116,
+  "method": "JAX 0.11.2 executable.cost_analysis(); jit(grad(benchmark_ph._objective(route, likelihood, p, data, arm))); same inputs as float64.json; compiler estimates, not measured memory or instructions",
+  "routes": {
+    "ph": {
+      "flops": 42870168.0,
+      "transcendentals": 660004.0,
+      "bytes accessed": 53370608.0
+    },
+    "ph_generic": {
+      "flops": 78060272.0,
+      "transcendentals": 1170004.0,
+      "bytes accessed": 95460896.0
+    }
+  }
+}
