@@ -28,7 +28,6 @@ from helpers import (
     NAN,
     X64,
     assert_close,
-    assert_rel_close,
     assert_tail_close,
     f,
     log1mexp,
@@ -85,10 +84,9 @@ def ph_exponential_reference(method, r, eta, t):
 
 
 def _compare(method, actual, expected):
-    if method == "log_cdf":  # 12.1: log probabilities with zero absolute tolerance
-        assert_rel_close(actual, expected, err_msg=method)
-    else:
-        assert_close(actual, expected, err_msg=method)
+    # 12.1, rev 63: `log_cdf = log1mexp(-u)` within rounding of zero is exempt
+    # from zero absolute tolerance, so every method uses the ordinary tolerances.
+    assert_close(actual, expected, err_msg=method)
 
 
 def _ph_weibull(k=K, b0=B0, eta=ETA):
@@ -409,31 +407,17 @@ def test_time_that_does_not_broadcast_is_rejected():
 @pytest.mark.step("A11")
 @pytest.mark.parametrize("grid", list(GRID_METHODS))
 def test_grid_twin_equals_time_first_direct_method(grid):
-    """spec 5, rev 41: `m_grid(t)` equals `m(t[:, None, None])` with shape `(K, *batch_shape)`, here `(K, S, 2)`."""
+    """spec 5/12.1, rev 63: `m_grid(t)` equals `m(t[:, None, None])` with shape `(K, *batch_shape)`, here `(K, S, 2)`, and the hand-derived values."""
     d, k, b0, eta = _draws_by_arm()
     t = np.array([3.0, 0.5, 0.5, 1.0, 6.0])  # unsorted, with a repeat
     out = getattr(d, grid)(f(t))
     method = GRID_METHODS[grid]
     assert np.shape(out) == (5, 3, 2)
     _compare(method, out, getattr(d, method)(f(t)[:, None, None]))
-    expected = ph_weibull_reference(method, k, b0, eta, t[:, None, None])
-    if method != "log_cdf":
-        _compare(method, out, expected)
-        return
-    # 4.2: upper-tail `log F` keeps relative precision "wherever `S` is a normal
-    # floating-point number". The reference S reaches ~3.2e-43 and ~1.0e-170,
-    # below float32's smallest normal, so the relative check is limited to
-    # entries whose reference S is normal in the active dtype (all of them in
-    # float64). Outside that range only a finite, nonpositive value is required;
-    # a backend may keep subnormals or flush to zero.
-    s_ref = ph_weibull_reference("survival", k, b0, eta, t[:, None, None])
-    normal = s_ref >= np.finfo(FLOAT).tiny
-    if X64:
-        assert normal.all()
-    actual = np.asarray(out).astype(np.float64)
-    assert_rel_close(actual[normal], expected[normal], err_msg=method)
-    assert np.isfinite(actual[~normal]).all()
-    assert (actual[~normal] <= 0.0).all()
+    # 4.2/12.1, rev 63: upper-tail `log F` has `log1mexp`'s absolute accuracy
+    # and may round to zero once `S` is below epsilon (the reference S reaches
+    # ~3.2e-43 and ~1.0e-170), so `log_cdf` uses the ordinary tolerances too.
+    _compare(method, out, ph_weibull_reference(method, k, b0, eta, t[:, None, None]))
 
 
 @pytest.mark.step("A11")

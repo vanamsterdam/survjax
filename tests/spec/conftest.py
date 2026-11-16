@@ -45,9 +45,9 @@ FEATURES = frozenset(
         "sampling",
         "observation.censoring",
         "observation.truncation",
+        "observation.traced_metadata",
         "family.lognormal",
         "family.loglogistic",
-        "observation.traced_metadata",
     }
 )
 
