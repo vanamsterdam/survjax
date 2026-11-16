@@ -15,10 +15,10 @@ Weibull, shape ``k``, scale ``b``, ``z = t/b``: ``log S = -z**k``,
 Expected values are evaluated in float64 NumPy from these formulas, at inputs
 that are exactly representable or whose float32 rounding is far below the 12.1
 float32 tolerances. ``log1mexp(x) = log(1 - exp(x))`` is the two-branch form of
-spec 7.2 (`helpers.log1mexp`). Rev 25 (12.1): `log_cdf` values are compared
-with zero absolute tolerance (`_check`), since upper-tail `log F` (Weibull
-``k=3``, ``b=2``, ``t=5``: ``H = 15.6``, ``log F = -1.6e-7``) is below the
-float32 ``atol``.
+spec 7.2 (`helpers.log1mexp`). Rev 63 (12.1): upper-tail `log F` (Weibull
+``k=3``, ``b=2``, ``t=5``: ``H = 15.6``, ``log F = -1.6e-7``) is a
+`log1mexp` value within rounding of zero, which 12.1 exempts from zero
+absolute tolerance, so every method uses the ordinary tolerances.
 """
 
 import numpy as np
@@ -71,11 +71,8 @@ DIRECT_METHODS = (
 
 
 def _check(method, actual, expected):
-    """Spec 12.1, rev 25: tiny log probabilities use zero absolute tolerance."""
-    if method == "log_cdf":
-        assert_rel_close(actual, expected)
-    else:
-        assert_close(actual, expected)
+    """Spec 12.1, rev 63: ordinary tolerances, `log_cdf` included (the `log1mexp` exception)."""
+    assert_close(actual, expected)
 
 
 # --------------------------------------------------------------- interior values

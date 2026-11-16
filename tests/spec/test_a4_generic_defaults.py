@@ -14,7 +14,7 @@ import jax
 import numpy as np
 import pytest
 import spec_families as fam
-from helpers import INF, NAN, assert_close, assert_rel_close, f, log1mexp
+from helpers import INF, NAN, assert_close, f, log1mexp
 
 
 def _exp(rate=0.5):
@@ -38,13 +38,14 @@ def test_default_cumulative_hazard_is_minus_log_survival():
 
 @pytest.mark.step("A4")
 def test_default_log_cdf():
-    """spec 4.2/7.2, rev 25: default `log_cdf = log1mexp(log S)`; `H = 0.25, 1, 15`.
+    """spec 4.2/7.2, rev 63: default `log_cdf = log1mexp(log S)`; `H = 0.25, 1, 15`.
 
-    At ``H = 15``, ``log F = -3.06e-7``, below the float32 ``atol``, so the
-    comparison has zero absolute tolerance (12.1, rev 25).
+    At ``H = 15``, ``log F = -3.06e-7`` is within rounding of zero for
+    ``log1mexp`` (7.2, rev 63), so 12.1's exception applies: the ordinary
+    tolerances, absolute floor included.
     """
     t = np.array([0.5, 2.0, 30.0])
-    assert_rel_close(_exp().log_cdf(f(t)), log1mexp(-0.5 * t))
+    assert_close(_exp().log_cdf(f(t)), log1mexp(-0.5 * t))
 
 
 @pytest.mark.step("A4")

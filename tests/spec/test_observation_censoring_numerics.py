@@ -1,4 +1,4 @@
-"""observation.censoring: tails, tiny masses, narrow intervals and `jax_debug_nans` for left/interval rows (spec 4.1, 7.1, 7.2, 12.1, 12.2; rev 51).
+"""observation.censoring: tails, tiny masses, narrow intervals and `jax_debug_nans` for left/interval rows (spec 4.1, 7.1, 7.2, 12.1, 12.2; rev 51, 63).
 
 12.2 makes "narrow intervals, interval cancellation ... Slice B evidence";
 12.1 (Numerical behaviour): "tiny nonzero masses, both tails, narrow
@@ -16,8 +16,24 @@ absolute tolerance, so that an erroneous zero cannot pass"). The relative
 scale is the 12.1 ``rtol`` unless stated: every value here is a sum of a few
 terms each accurate to a few ulps times at most ``1 + k |log(t/b)|`` (the
 ``z**k`` amplification of ``helpers._reference``), and that bound is below
-the 12.1 ``rtol`` for all cases. Upper-tail ``log F`` uses
-``helpers.tail_rtol`` (as for A5's ``log_cdf`` tails).
+the 12.1 ``rtol`` for all cases.
+
+Rev 63 (7.2, 12.1): upper-tail ``log F`` and other `log1mexp` values within
+rounding of zero are accurate in absolute terms only, and 12.1 compares them
+with "the ordinary absolute tolerance" (zero acceptable where the true value is
+smaller); 12.1 adds "likelihood rows with wide intervals and upper-tail left
+censoring, values and first and second derivatives", the derivatives with
+relative accuracy (``helpers.tail_rtol``, zero absolute tolerance).
+
+Hand derivatives, Exponential ``r = 1`` (as in
+``test_observation_censoring_derivatives.py``): left at ``c``:
+``dl/dr = c/expm1(c)``, ``d2l/dr2 = -c**2 exp(c)/expm1(c)**2``; interval
+``(a, a + w]``: ``dl/dr = -a + w/expm1(w)``, ``d2l/dr2 = -w**2 exp(w)/expm1(w)**2``.
+Each ``exp(x)/expm1(x)**k`` is evaluated as ``exp(-x)/(-expm1(-x))**k`` so
+that the float64 reference does not overflow at 600. Weibull left at ``c``,
+``H = (c/b)**k``, ``L = log(c/b)``, ``g1 = 1/expm1(H)``,
+``g2 = -exp(H)/expm1(H)**2``: ``dl/dk = g1 H L``,
+``d2l/dk2 = g2 (H L)**2 + g1 H L**2`` (as in A5).
 """
 
 import jax
@@ -30,6 +46,7 @@ from helpers import (
     INF,
     NAN,
     X64,
+    assert_close,
     assert_tail_close,
     f,
     flag_data,
@@ -98,22 +115,106 @@ UPPER_H = [20.0, 33.0, 55.0, 600.0 if X64 else 70.0]
 @FEATURE
 @pytest.mark.parametrize("h", UPPER_H)
 def test_exponential_left_row_in_the_upper_tail(h):
-    """spec 4.1 and 12.1, rev 51: left at `c = H` (`r = 1`): `log F ~ -exp(-H)`, negative and nonzero, with relative precision."""
+    """spec 4.1, 7.2 and 12.1, rev 63: left at `c = H` (`r = 1`): `log F ~ -exp(-H)` within the ordinary absolute tolerance."""
     (c,) = ref.rounded(h)
     out = ll(_exp(), flag_data(["left"], [c]))
-    assert out[0] < 0
-    assert_tail_close(out, [mp_log_cdf(c)], tail_rtol(c))
+    assert_close(out, [mp_log_cdf(c)])
 
 
 @FEATURE
 @pytest.mark.parametrize("h", UPPER_H)
 def test_weibull_left_row_in_the_upper_tail(h):
-    """spec 4.1 and 12.1, rev 51: Weibull `k=2`, `b=1`, left at `sqrt(H)`: `log F ~ -exp(-H)` against mpmath at the rounded time."""
+    """spec 4.1, 7.2 and 12.1, rev 63: Weibull `k=2`, `b=1`, left at `sqrt(H)`: `log F ~ -exp(-H)` within the ordinary absolute tolerance."""
     (c,) = ref.rounded(np.sqrt(h))
     big_h = mp_weibull_cumulative_hazard(2.0, 1.0, c)
     out = ll(_weib(2.0, 1.0), flag_data(["left"], [c]))
-    assert out[0] < 0
-    assert_tail_close(out, [mp_log_cdf(big_h)], tail_rtol(float(big_h)))
+    assert_close(out, [mp_log_cdf(big_h)])
+
+
+def _derivatives(fn, p):
+    """First and second derivatives in reverse and forward mode."""
+    return (
+        (jax.grad(fn)(p), jax.jacfwd(fn)(p)),
+        (jax.grad(jax.grad(fn))(p), jax.jacfwd(jax.jacrev(fn))(p)),
+    )
+
+
+def _assert_derivatives(fn, p, d1, d2, h):
+    rtol = tail_rtol(max(h, 1.0))
+    (g_rev, g_fwd), (h_rev, h_fwd) = _derivatives(fn, p)
+    for got in (g_rev, g_fwd):
+        assert_tail_close(got, d1, rtol)
+    for got in (h_rev, h_fwd):
+        assert_tail_close(got, d2, rtol)
+
+
+def _sum_ll(make, data):
+    return lambda p: make(p).log_likelihood(data).sum()
+
+
+@FEATURE
+@pytest.mark.parametrize("h", UPPER_H)
+def test_exponential_left_row_in_the_upper_tail_rate_derivatives(h):
+    """spec 7.2, 7.3 and 12.1, rev 63: left at `c = H` (`r = 1`): `c/expm1(c)` and `-c**2 exp(c)/expm1(c)**2`, relative accuracy."""
+    (c,) = ref.rounded(h)
+    em1 = np.expm1(-c)
+    d1, d2 = c * np.exp(-c) / -em1, -(c**2) * np.exp(-c) / em1**2
+    data = flag_data(["left"], [c])
+    _assert_derivatives(_sum_ll(lambda r: survjax.Exponential(rate=r), data), f(1.0), d1, d2, h)
+
+
+@FEATURE
+@pytest.mark.parametrize("h", UPPER_H)
+def test_weibull_left_row_in_the_upper_tail_shape_derivatives(h):
+    """spec 7.2, 7.3 and 12.1, rev 63: Weibull `k=2`, `b=1`, left at `sqrt(H)`: `g1 H L` and `g2 (H L)**2 + g1 H L**2`, relative accuracy."""
+    (c,) = ref.rounded(np.sqrt(h))
+    hh = float(mp_weibull_cumulative_hazard(2.0, 1.0, c))
+    lz = np.log(c)
+    em1 = np.expm1(-hh)
+    g1, g2 = np.exp(-hh) / -em1, -np.exp(-hh) / em1**2
+    d1 = g1 * hh * lz
+    d2 = g2 * (hh * lz) ** 2 + g1 * hh * lz**2
+    data = flag_data(["left"], [c])
+    _assert_derivatives(_sum_ll(lambda k: survjax.Weibull(shape=k, scale=f(1.0)), data), f(2.0), d1, d2, h)
+
+
+# Wide intervals ``(0.25, 0.25 + H]`` (endpoints exact in both dtypes), Exponential ``r = 1``:
+# ``l = -0.25 + log1mexp(-H)``, the `log1mexp` term within rounding of zero.
+WIDE_A = 0.25
+
+
+@FEATURE
+@pytest.mark.parametrize("h", UPPER_H)
+def test_exponential_wide_interval_value(h):
+    """spec 7.2 and 12.1, rev 63: interval `(0.25, 0.25 + H]`, `r = 1`: `-0.25 + log(1 - e**-H)` within the ordinary tolerances."""
+    out = ll(_exp(), flag_data(["interval"], [WIDE_A], [WIDE_A + h]))
+    assert_close(out, [ref.contribution("exponential", (1.0,), WIDE_A, WIDE_A + h)])
+
+
+@FEATURE
+@pytest.mark.parametrize("h", UPPER_H)
+def test_exponential_wide_interval_rate_derivatives(h):
+    """spec 7.2, 7.3 and 12.1, rev 63: interval `(0.25, 0.25 + H]`: `-0.25 + H/expm1(H)` and `-H**2 exp(H)/expm1(H)**2`, relative accuracy."""
+    em1 = np.expm1(-h)
+    d1 = -WIDE_A + h * np.exp(-h) / -em1
+    d2 = -(h**2) * np.exp(-h) / em1**2
+    data = flag_data(["interval"], [WIDE_A], [WIDE_A + h])
+    _assert_derivatives(_sum_ll(lambda r: survjax.Exponential(rate=r), data), f(1.0), d1, d2, h)
+
+
+@FEATURE
+def test_wide_interval_and_upper_tail_left_rows_in_one_batch():
+    """spec 7.2 and 12.1, rev 63: a batch of a wide interval and an upper-tail left row (`H = 33`): values and the summed rate derivatives.
+
+    Sum of the two rows' hand derivatives (Exponential ``r = 1``).
+    """
+    h = 33.0
+    data = flag_data(["interval", "left"], [WIDE_A, h], [WIDE_A + h, NAN])
+    out = ll(_exp(), data)
+    assert_close(out, [ref.contribution("exponential", (1.0,), WIDE_A, WIDE_A + h), mp_log_cdf(h)])
+    em1 = np.expm1(-h)
+    g1, g2 = h * np.exp(-h) / -em1, -(h**2) * np.exp(-h) / em1**2
+    _assert_derivatives(_sum_ll(lambda r: survjax.Exponential(rate=r), data), f(1.0), -WIDE_A + 2 * g1, 2 * g2, h)
 
 
 @FEATURE
