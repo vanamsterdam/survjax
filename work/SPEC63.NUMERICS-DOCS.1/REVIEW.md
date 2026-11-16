@@ -82,8 +82,31 @@ Starting and previous-step final commit:
 69ffc7c. Original branch/worktree base:
 3852184bb0e6f0a0a9b746ad8b92a95f675b23d0. No new deviations.
 No further substeps in this documentation topic; maintainer integration remains.
-Independent review and final diff display pending.
+
+## Independent review outcome
+
+Round 1/3 reviewed c294f6221c15482bb563e4ce0381686347af5fcc:
+**VERDICT: merge**, no blockers or should-fix findings. Report:
+[SPEC63.NUMERICS-DOCS.1](../../../review/slices/SPEC63.NUMERICS-DOCS.1.md).
+The reviewer independently passed the fast gate and checked the revised prose
+and example algebra against the spec. Its float32 spec results were 4759
+passed / 104 skipped, with the same two warnings. It did not attempt the docs
+build, re-execute the cells or inspect the rendered HTML/MathJax. Those build
+and HTML-output results above remain implementer verification; visual QA is
+unverified by either party. Mutation checks are inapplicable to this docs step.
+
+N-1 is a nonblocking suggestion to replace "about half the dtype's epsilon"
+with the general wording from spec 4.1. We retain the current approximation:
+spec 7.2 explicitly gives "below about half the dtype's epsilon" for the
+log1mexp rounding threshold. The page's "may" and "about" match that rule,
+while remaining consistent with 4.1's less specific below-epsilon statement.
+No page change follows the terminal review.
+
+The workspace diff hook succeeded: pane %112, window @32, displaying
+3701148..c294f62. The final record-only commit adds this outcome; the reviewed
+page and its executed examples are unchanged. No new deviations or code
+substeps remain; the linked numerical-behaviour Docs to-do is covered.
 
 ROADMAP status: Revision-63 numerical-behaviour documentation updated and
-executed successfully in both dtypes; fast gate passes. Independent review and
-maintainer integration pending; no documentation substeps remain for this topic.
+executed successfully in both dtypes; fast gate passes; independent review
+round 1 verdict merge. Documentation follow-up complete; integration remains.
