@@ -1,6 +1,6 @@
 # BAYES.CENSOR20.9 — Fixed-limit trial handoff
 
-Independent review: round 1/3
+Independent review: round 2/3
 
 ## Read first
 
@@ -66,3 +66,25 @@ no spec edits are inferred from the runtime-value request.
 The maintainer withdrew the merge instruction; PR #12 was confirmed OPEN with
 no mergedAt/mergeCommit. Push this reviewed step to the existing PR, never
 merge it. Generated nvim.log preserved at /tmp/survjax-before-censor20-nvim.log.
+
+## Round 1 response
+
+Reviewed commit: d88d3aaa659bf98481b68908ec4b4cc298a76c12.
+Verdict: fix-first. Finding IDs: F-1, N-1, S-1.
+
+- F-1: removed the three stderr outputs from the notebook setup cell (tqdm
+  widgets warning and Matplotlib cache messages with local paths). The cell
+  again has no saved outputs. All calculated outputs/plots and executable
+  source stay unchanged. Scanned every saved output: no /Users/ or
+  /var/folders/ paths remain. No dependency added for a warning-only display.
+- N-1: directly checked np.percentile(saved time, 90), rounded down to half
+  a year, against saved tau_grid[-1]; both yield 13.5. This validates the
+  horizon claim without changing it.
+- S-1: maintainer owns resolution of the logged explicit fixed-limit request.
+  No spec changes or deviation resolution made by the implementer.
+- Reviewer passed the exact trial/20.0 check and posterior reproduction;
+  notebook execution could not start because its sandbox blocks local ports.
+  Its fast gate was incomplete at review write time, with no observed failures.
+- Output-only fix validation: notebook JSON parses, setup outputs empty, no
+  local paths in saved outputs, horizon assertion passes, git diff --check
+  clean. No numerical/source changes, so no NUTS/test repeat for this cleanup.
