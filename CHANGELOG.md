@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.0.1a3 — 2026-11-13
 
-Changes in the current source checkout since alpha 2:
+Changes since alpha 2, scheduled for release on 13 November 2026.
+Publication is pending completion of the release checks:
 
 - Likelihoods now support left and interval censoring and left, right or
   two-sided truncation, alongside exact events and right censoring.
@@ -13,13 +14,16 @@ Changes in the current source checkout since alpha 2:
 - Derive traced observation metadata from constructor argument form, allowing
   unused likelihood paths to be pruned while retaining diagnostics.
 - Document the expanded likelihoods, metadata and committed flexsurv comparison
-  coverage. CI and release checks select acceptance through A12 plus the
-  completed features in `scripts/spec-features.txt`.
+  coverage. CI and release checks select all baseline acceptance tests plus
+  the completed features in `scripts/spec-features.txt`.
 
 Concordance still requires exact/right-censored data without truncation.
 RMST remains limited to Exponential, Weibull and their PH wrappers, with the
 [documented derivative limits](docs/rmst.md). These changes do not imply a new
-published release or support for all planned slices.
+published release or support for all planned slices. Unrestricted means,
+medians, quantiles, event-time sampling, Kaplan–Meier and additional evaluation
+metrics remain future work. The core still depends only on JAX and NumPy;
+no broader version or accelerator support is claimed by this preparation.
 
 ## 0.0.1a2 — 2026-11-06
 
