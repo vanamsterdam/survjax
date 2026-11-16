@@ -13,7 +13,7 @@ COMMITTED = ROOT / "examples/bayesian_rmst/results/posterior.npz"
 NOTEBOOK = ROOT / "examples/bayesian_rmst/bayesian-rmst.ipynb"
 
 
-def test_notebook_trial_matches_shared_generator(tmp_path):
+def test_notebook_trial_matches_shared_generator():
     """02: the standalone trial preserves the shared generator's exact draws."""
     notebook = json.loads(NOTEBOOK.read_text())
     trial_cell = next(
@@ -30,7 +30,7 @@ def test_notebook_trial_matches_shared_generator(tmp_path):
         "np.testing.assert_array_equal(data.lower, trial.data.lower)\n"
         "np.testing.assert_array_equal(data.exact, trial.data.exact)\n"
         "np.testing.assert_array_equal(arm, trial.arm)\n"
-        "assert censor_limit == trial.censor_limit\n"
+        "assert censor_limit == trial.censor_limit == 20.0\n"
     )
     subprocess.run(
         [sys.executable, "-c", program],

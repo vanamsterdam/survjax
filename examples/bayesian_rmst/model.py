@@ -8,7 +8,7 @@ import numpyro
 import numpyro.distributions as distributions
 
 import survjax
-from examples.weibull_simulation.study import calibrate_censoring, generate_weibull
+from examples.weibull_simulation.study import generate_weibull
 
 ROOT_KEY = 20261025  # shared by all use cases; this one folds in 2 (spec 02-details)
 TRUE_SHAPE = 1.38
@@ -30,7 +30,7 @@ def use_case_key(stream: int) -> jax.Array:
 
 
 def make_trial() -> Trial:
-    """Generate the 150-control/150-treatment trial with about 55% censoring.
+    """Generate the 150-control/150-treatment trial with Uniform(0, 20) censoring.
 
     Returns:
         The trial; times in years.
@@ -42,9 +42,7 @@ def make_trial() -> Trial:
         raise RuntimeError("The Bayesian example requires JAX_ENABLE_X64=1")
     arm = jnp.repeat(jnp.array([0.0, 1.0]), 150)
     eta = jnp.log(TRUE_HAZARD_RATIO) * arm
-    censor_limit = calibrate_censoring(
-        TRUE_SHAPE, TRUE_SCALE, 0.55, log_hazard_ratio=eta
-    )
+    censor_limit = 20.0
     generated = generate_weibull(
         use_case_key(0), TRUE_SHAPE, TRUE_SCALE, censor_limit, log_hazard_ratio=eta
     )
