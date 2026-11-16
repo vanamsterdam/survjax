@@ -14,9 +14,10 @@ lint: ## ruff format check and lint (check.sh step 2)
 	uv run ruff format --check .
 	uv run ruff check .
 
-format: ## ruff: rewrite in place
-	uv run ruff format .
-	uv run ruff check --fix .
+format: ## ruff: rewrite editable files in place
+	# Spec, independent tests and legacy plans are read-only.
+	uv run ruff format --extend-exclude spec,tests/spec,plans .
+	uv run ruff check --fix --extend-exclude spec,tests/spec,plans .
 
 typecheck: ## mypy on the package (check.sh step 2)
 	uv run mypy src
