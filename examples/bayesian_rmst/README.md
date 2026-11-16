@@ -43,7 +43,16 @@ For minibatches, explicitly index both `data[idx]` and `arm[idx]` before
 evaluating the likelihood; NumPyro supplies `N / batch_size` scaling.
 The NUTS runner uses full data.
 
-The notebook needs a full checkout, including `model.py` and the shared
-`examples/weibull_simulation/study.py` generator. It finds the repository root
-from either the root or its own directory; the notebook download alone is not
-standalone. Keeping this import ensures both trials use the same generator.
+The notebook can be copied to any directory and run without a checkout or
+repository imports. Use Python 3.12 with `survjax==0.0.1a3`,
+`numpyro==0.22.0`, `matplotlib==3.11.2`, `jupyterlab==4.6.4` and
+`ipykernel==7.4.0`; the notebook check used JAX 0.11.2 and NumPy 2.5.3.
+Open it in Jupyter, then **Restart Kernel and Run All Cells**. Its setup cell
+enables float64. The short local trial draw uses the shared generator's key
+and recorded calibrated censoring limit; an optional check verifies exact
+agreement. The command-line runner still needs a checkout and uses the shared
+generator. From the repository root, run the notebook and reproduction checks:
+
+```sh
+uv run --group docs --group examples --group test pytest -q tests/unit/check_bayesian_run.py
+```

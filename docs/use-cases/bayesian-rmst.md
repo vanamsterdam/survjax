@@ -353,12 +353,19 @@ from the same draws. See the [proportional hazards](../proportional-hazards.md),
 
 ## Reproduce
 
-To work through the analysis interactively, use a full repository checkout,
-then **Restart Kernel and Run All Cells** in a fresh Python 3 kernel. The
-notebook can run with its working directory at the root or in its own folder;
-it locates the root and imports the shared trial generator. Downloading the
-notebook alone is insufficient: it needs `examples/bayesian_rmst/model.py`
-and `examples/weibull_simulation/study.py`. From the repository root:
+The downloadable notebook can run from any directory without a repository
+checkout. It imports installed dependencies only and spells out the short
+synthetic trial draw using the shared generator's key and recorded calibrated
+censoring limit. An example check verifies that its times, event indicators,
+arms and censoring limit match the shared generator exactly.
+
+Use a Python 3.12 environment with `survjax==0.0.1a3`, `numpyro==0.22.0`,
+`matplotlib==3.11.2`, `jupyterlab==4.6.4` and `ipykernel==7.4.0`, the versions
+used for the notebook check. The checked JAX and NumPy versions are 0.11.2
+and 2.5.3. Open the notebook in Jupyter, then **Restart Kernel and Run All
+Cells**; the setup cell enables float64 before generating the trial.
+
+Alternatively, from the repository root, use the locked environment:
 
 ```bash
 uv run --group docs --group examples jupyter lab examples/bayesian_rmst/bayesian-rmst.ipynb
@@ -380,8 +387,9 @@ RMST routes agree, that the chains converged, and that the true hazard ratio
 and $\Delta\mathrm{RMST}(5)$ lie inside their 95% credible intervals. The
 runner and notebook use float64 to reproduce the committed simulated trial
 and its numerical checks. Float64 is not a general requirement of the Weibull
-model or factor integration. The shared `make_trial()` helper deliberately
-raises `RuntimeError` if float64 is disabled to protect that reproduction.
+model or factor integration. The runner still uses the shared `make_trial()`
+helper, which raises `RuntimeError` if float64 is disabled to protect that
+reproduction; the standalone notebook enables float64 in its setup cell.
 The notebook uses a different NUTS key from the runner, so use the
 runner to reproduce the committed posterior. The runner needs only the optional
 `examples` dependencies; survjax itself does not depend on NumPyro.
