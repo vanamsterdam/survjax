@@ -48,3 +48,17 @@ display hook, then stop. Report the roadmap status line without editing it.
 
 None expected: this step verifies already documented behavior. Generic RMST
 integration and its documentation remain separately assigned work.
+
+## Restored-fixture validation
+
+Maintainer merged updated main into fastlane at
+29a91a79094999d7782f1c3346cf6ee141f25ce1 and requested spec-test verification
+and a diff display. The tester update a0e7f49 is synced by 28b54e2 and merged
+in main 69b796f. It restores the Slice B fixture and the comprehensive
+test_observation_traced_metadata.py file (replacing the forms-only file).
+The fixture is byte-identical to the manifest-checked implementer fixture.
+Keep the original Step starting commit above. Rerun scripts/check.sh in full
+with all five committed features, record both-dtype results, and update this
+step's handoff. No implementation or protected-path edits are planned.
+The prior independent review's S-1 now has external tester evidence; request
+round 2 after committing the updated evidence, then display the step diff.

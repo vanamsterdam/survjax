@@ -1,6 +1,6 @@
 # SPEC62-63.1 — Revision 62–63 compatibility audit
 
-Independent review: round 1/3
+Independent review: round 2/3
 
 ## Read first
 
@@ -135,7 +135,42 @@ Optional workspace diff hook succeeded: pane %112, window @32, displaying
 3852184..aa5629d. Maintainer must restore/resync the fixture and rerun the full
 both-dtype gate. No roadmap edit, merge, push or publication was performed.
 
-ROADMAP status: Revisions 62–63 numerical/metadata checks pass; boolean-mask
-compilation reuse fixed; D-SUMMARY.READINESS-001 closed. Full-gate completion
-blocked by deleted Slice B acceptance fixture (D-SPEC62-63.1-001); independent
-review round 1 verdict maintainer, no code findings.
+## Restored-fixture validation (supersedes the earlier failed gate)
+
+Resumption checkpoint: 29a91a79094999d7782f1c3346cf6ee141f25ce1, the
+maintainer's merge of current main 69b796fa9192fb382bfd38bcbd80e3a67078fa0d.
+Tester a0e7f49, synced in 28b54e2, restores the Slice B acceptance fixture and
+the comprehensive test_observation_traced_metadata.py suite. A byte comparison
+of the two Slice B fixture copies passed. No source or test changes are needed.
+The original Step starting commit remains 3852184; previous handoff commit was
+f73d79e. This follow-up changes only this step's records.
+
+Full `scripts/check.sh` passed, without dtype/feature/slow-test filters:
+
+| Stage | Float64 | Float32 |
+| --- | --- | --- |
+| Implementer tests | 1529 passed, 8 skipped | 1528 passed, 9 skipped |
+| Source doctests | 4 passed | 4 passed |
+| Spec tests | 4899 passed, 47 skipped | 4810 passed, 126 skipped |
+
+Guard passed on fastlane. Ruff: 304 files formatted; lint passed. Mypy: no
+issues in 25 source files. Both spec runs emitted only the two existing NumPy
+PH reference warnings. The gate built and supplied its wheel and ended with
+`check: all gates passed` for the entire baseline plus observation.censoring,
+observation.truncation, observation.traced_metadata, family.lognormal and
+family.loglogistic. Summary activation is unchanged; the separate RMST evidence
+above remains the evidence for D-SUMMARY.READINESS-001.
+
+The cause of D-SPEC62-63.1-001/reviewer S-1 no longer reproduces. Its formal
+disposition remains with the maintainer. Pre-review `scripts/check.sh --fast`
+also passes: implementer suites 1221 passed / 8 skipped (float64) and
+1223 passed / 6 skipped (float32); source doctests 4 passed per dtype; spec
+suites 4689 passed / 47 skipped (float64) and 4631 passed / 95 skipped
+(float32). Both spec runs have the same two existing warnings. No test or
+source change was needed. Independent review round 2 result follows when
+complete. Display the saved starting commit through the final reviewed commit
+with the workspace diff hook.
+
+ROADMAP status: Rev 62–63 compatibility and full both-dtype gate pass after
+tester fixture restoration; boolean-mask compilation reuse fixed;
+D-SUMMARY.READINESS-001 closed. Review follow-up pending; integration remains.

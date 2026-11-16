@@ -37,3 +37,12 @@
   the byte-identity assertion remains unchanged. Remaining gate stages run
   directly to expose other failures without bypassing the missing fixture.
 - Status: open; tester/maintainer action requested during this task.
+
+### Restored-fixture verification
+
+The maintainer supplied tester a0e7f49 through main 69b796f and merged it into
+fastlane at 29a91a7. The restored acceptance fixture is byte-identical to the
+implementer fixture. Full scripts/check.sh now passes in both dtypes with all
+five committed features, including the fixture integrity and R reference tests.
+The reported failure no longer reproduces; formal disposition remains with the
+maintainer. No protected path was edited by this step.
