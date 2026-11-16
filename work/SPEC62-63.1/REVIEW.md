@@ -167,10 +167,34 @@ also passes: implementer suites 1221 passed / 8 skipped (float64) and
 1223 passed / 6 skipped (float32); source doctests 4 passed per dtype; spec
 suites 4689 passed / 47 skipped (float64) and 4631 passed / 95 skipped
 (float32). Both spec runs have the same two existing warnings. No test or
-source change was needed. Independent review round 2 result follows when
-complete. Display the saved starting commit through the final reviewed commit
-with the workspace diff hook.
+source change was needed.
+
+### Independent review round 2
+
+Round 2/3 reviewed ec8c3b2818099bacd712d305b954d99512e9a335, against
+previous reviewed aa5629d0a1688d724dcd14c8ab6325121c57f9b5, finding S-1.
+**VERDICT: maintainer**, no new code findings and no implementer fix requested.
+The reviewer could see the committed fixture restoration but could not rerun
+gates: checkout HEAD advanced to ec8c3b2 while its protected tests/spec working
+files remained stale, with writes refused. The round-2 report documents the
+dirty checkout and did not claim to test that mismatched tree. We did not
+repair/reset it or request another round. The independent-review skill says
+not to repair or replace an existing dirty reviewer checkout.
+
+Thus the full and fast passing gate counts above are implementer verification;
+round 2 supplies no independent rerun. S-1's triggering failure is absent here,
+and formal disposition of it and D-SPEC62-63.1-001 remains with the maintainer.
+Review report: [SPEC62-63.1](../../../review/slices/SPEC62-63.1.md).
+
+Workspace diff display succeeded in pane %112, window @32:
+3852184bb0e6f0a0a9b746ad8b92a95f675b23d0..ec8c3b2818099bacd712d305b954d99512e9a335.
+Compared with current main 69b796f, implementation remains the one explicit
+boolean-mask cast and two parameterized regression cases; other branch changes
+are the step records. This final record-only commit adds the review outcome;
+no code or test changes follow the passing gate or review.
 
 ROADMAP status: Rev 62–63 compatibility and full both-dtype gate pass after
 tester fixture restoration; boolean-mask compilation reuse fixed;
-D-SUMMARY.READINESS-001 closed. Review follow-up pending; integration remains.
+D-SUMMARY.READINESS-001 closed. Round 2 has no code findings; independent gate
+rerun blocked by stale protected reviewer files. Maintainer disposition and
+integration remain; no implementation substeps remain.
