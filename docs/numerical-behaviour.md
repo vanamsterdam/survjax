@@ -115,8 +115,9 @@ model assigns exactly zero mass. Both can return $-\infty$:
 | NaN | Invalid data/declared parameters, zero inclusion-window mass, or a numerical failure |
 
 The scalar value alone does not identify the cause. Use data and parameter
-diagnostics and the model's support. A nonzero contribution representable in
-the dtype's normal range must not be relabelled as zero. Float64 can delay overflow, but it
+diagnostics and the model's support. A probability lost to underflow does not
+establish true zero mass. The [upper-tail log-CDF rule](#precision-in-both-tails)
+below allows rounding when a probability is close to one. Float64 can delay overflow, but it
 cannot represent $-10^{500}$ either. survjax follows JAX's configured dtype;
 it does not turn on 64-bit mode itself.
 
@@ -226,15 +227,23 @@ fields can introduce invalidity beyond the stored issue bits.
 ## Precision in both tails
 
 The probability of progression by time $t$, $F(t) = 1 - S(t)$, is needed
-for left- and interval-censored data, and it is easy to lose. survjax
-computes $\log F$ from $\log H$, which keeps relative precision at both
-ends of the time axis, within the limits of floating point: in the lower tail
-wherever $\log H$ itself is representable, even when $H$ and $F$ underflow,
-and in the upper tail wherever $S = e^{-H}$ is a normal floating-point number
-(down to about $10^{-38}$ in float32 and $10^{-308}$ in float64). Beyond
-that, $S$ underflows and $\log F \approx -S$ rounds to 0; for example,
-`Exponential(rate=1.0).log_cdf(1000.0)` is $-0.0$ in both modes, although
-the exact value $-e^{-1000} \approx -10^{-434}$ is negative.
+for left- and interval-censored data. Exponential and Weibull compute
+$\log F$ from $\log H$ to retain lower-tail relative precision wherever
+$\log H$ is representable, even when $H$ and $F$ underflow. The generic
+default retains lower-tail accuracy until $\log S$ underflows; a custom
+family can override it when that far lower tail matters.
+
+In the upper tail, $\log F \approx -S$ is close to zero. Its value has
+ordinary absolute accuracy and may round to zero once $S$ falls below about
+half the dtype's epsilon, even while $S$ is representable. Use `log_survival`
+to retain the upper tail. This rounding of a probability close to one is
+accepted; it does not establish full coverage. The `uninformative` diagnostic
+comes from the observation set and truncation window, never from a zero
+log-likelihood value.
+
+First and second parameter derivatives still retain relative accuracy on
+the valid smooth cases covered by the [derivative guarantee](#the-limits-of-derivative-isolation).
+A rounded-zero `log_cdf` can therefore have nonzero derivatives.
 
 **Very early.** With $k = 2$ and $b = 10$, at $t = 10^{-30}$ months
 $H = 10^{-62}$, which is too small even to store in float32. The naive
@@ -247,12 +256,22 @@ early = 1e-30
 jnp.log(1.0 - wearout.survival(early)), wearout.log_cdf(early)
 ```
 
-**Very late.** At $t = 60$ months, $H = 36$ and $S = e^{-36} \approx 2.3
-\times 10^{-16}$. Then $\log F = \log(1 - S) \approx -S$, a tiny negative
-number. Forming $1 - S$ first rounds it away (to exactly 0 in float32, and
-to the wrong value in float64); `log_cdf` keeps it:
+**Very late.** At $t = 70$ months, $H = 49$ and $S = e^{-49} \approx 5.2
+\times 10^{-22}$. The returned $\log F$ rounds to zero in both dtype modes.
+Survival stays positive, and log survival stays close to $-49$:
 
 ```{code-cell} ipython3
-late = 60.0
-jnp.log(1.0 - wearout.survival(late)), wearout.log_cdf(late), -wearout.survival(late)
+late = 70.0
+wearout.log_cdf(late), wearout.survival(late), wearout.log_survival(late)
+```
+
+The scale derivative remains nonzero. For this shape-2 Weibull it is
+$\partial_b \log F = -(2H/b)e^{-H}/(1-e^{-H})$, about $-5.1\times10^{-21}$:
+
+```{code-cell} ipython3
+def log_probability_by_scale(scale):
+    return survjax.Weibull(shape=2.0, scale=scale).log_cdf(late)
+
+
+jax.value_and_grad(log_probability_by_scale)(10.0)
 ```
