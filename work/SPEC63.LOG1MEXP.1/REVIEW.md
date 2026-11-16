@@ -117,8 +117,38 @@ The required inventory refresh completed with 201 slow tests. It adds 36 and
 removes 357 generated lines after measuring the full suites. This
 puts the combined step over the usual ~300-line target. The maintainer
 explicitly approved including the generated refresh in this same step.
-Implementation/test changes remain about 170 lines. Full and fast gates pass;
-independent review follows this committed handoff.
+Implementation/test changes remain about 170 lines. Full and fast gates pass.
+
+## Independent review outcome
+
+Round 1/3 reviewed 69ffc7c0c0272c4170cf310bde217edbbfb95dfc:
+**VERDICT: merge**, no blocker or should-fix findings.
+Report: [SPEC63.LOG1MEXP.1](../../../review/slices/SPEC63.LOG1MEXP.1.md).
+The reviewer independently passed scripts/check.sh --fast and all four touched
+unit files in full (102 passed per dtype). Its checkout reached the requested
+commit with the correct tester snapshot; the earlier checkout problem did not
+recur. The full gate counts above remain implementer verification.
+
+- N-1 is optional endpoint-derivative coverage. Endpoint values and interior
+  non-contamination are tested; the derivative assertions deliberately cover
+  smooth interior entries rather than adding a boundary derivative promise.
+  No change is required for this nonblocking nit.
+- N-2 is the reviewer's unverified minimum-version dependency. The implementer
+  checked pyproject.toml's existing jax>=0.11.2 requirement and ran all checks
+  with JAX 0.11.2, including native HIGHEST-mode value and derivative probes.
+  This verifies the existing minimum for this primitive without a dependency
+  change or a broader version-matrix claim.
+
+The reviewer could not create its mutation checkout because the sandbox
+refused .git/worktrees creation, and did not run mutation checks. It did not
+repeat the full gate or inspect each generated inventory entry. No omitted
+check is claimed as independently verified. No review fix-up is needed.
+
+The workspace diff hook succeeded: pane %112, window @32, displaying
+c4023cf..69ffc7c. This final record-only commit adds the review outcome;
+no source or test changes follow the reviewed implementation. The inventory
+refresh command used PYTEST_WORKERS=6, the shared git-directory JAX cache,
+and JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS=0.
 
 Starting/previous step final: c4023cf392a8fb71feb5187af15e396514c244b9.
 Original branch/worktree base: 3852184bb0e6f0a0a9b746ad8b92a95f675b23d0.
@@ -130,5 +160,5 @@ in PLAN.md; maintainer integration is separate.
 
 ROADMAP status: Revision-63 single-branch log1mexp implemented with native
 highest-accuracy expm1; full/fast both-dtype gates and focused derivative suites pass.
-Generated-inventory scope approved; commit and independent review pending.
-Numerical-behaviour docs remain a follow-up.
+Generated-inventory refresh approved and committed; independent review round 1
+verdict merge. Numerical-behaviour docs and maintainer integration remain.

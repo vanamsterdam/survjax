@@ -62,3 +62,16 @@ tails" explanation and late-time example to revision 63: absolute accuracy
 for upper-tail log F, relative derivative accuracy, and log_survival for the
 tail itself. Do not edit docs in this code step. Public signatures and shapes
 remain unchanged.
+
+## Exact one-off reviewer repair
+
+These commands were run outside the reviewer's restricted process, with the
+maintainer's explicit discard authorization. No chmod or role/settings change
+was necessary. The last command printed nothing; SOURCE_COMMIT and the fixture
+then matched the implementer tree. Subsequent review checkout to 69ffc7c worked.
+
+```sh
+git -C /Users/wamster3/dev/survjax/review/code-fastlane checkout --detach --force c4023cf392a8fb71feb5187af15e396514c244b9
+git -C /Users/wamster3/dev/survjax/review/code-fastlane clean -fd -- tests/spec/
+git -C /Users/wamster3/dev/survjax/review/code-fastlane status --porcelain
+```
