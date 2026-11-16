@@ -250,7 +250,8 @@ summaries of the 4,000 values in `delta5`.
 
 Optionally, the full `model.py` declares the same quantities as deterministic
 sites outside the observation plate. Its `compute_rmst=False` default keeps
-them out of NUTS; `Predictive` fills them afterwards for each posterior draw:
+them out of NUTS; `Predictive` fills them afterwards for each posterior draw.
+From the repository root, use the full model:
 
 ```python
 from numpyro.infer import Predictive
@@ -379,8 +380,9 @@ RMST routes agree, that the chains converged, and that the true hazard ratio
 and $\Delta\mathrm{RMST}(5)$ lie inside their 95% credible intervals. The
 runner and notebook use float64 to reproduce the committed simulated trial
 and its numerical checks. Float64 is not a general requirement of the Weibull
-model or factor integration; float32 changes the random trial and numerical
-precision. The notebook uses a different NUTS key from the runner, so use the
+model or factor integration. The shared `make_trial()` helper deliberately
+raises `RuntimeError` if float64 is disabled to protect that reproduction.
+The notebook uses a different NUTS key from the runner, so use the
 runner to reproduce the committed posterior. The runner needs only the optional
 `examples` dependencies; survjax itself does not depend on NumPyro.
 

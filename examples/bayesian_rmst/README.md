@@ -30,7 +30,9 @@ group.
 
 Use float64 to reproduce the committed trial and its numerical checks; it is
 not a general requirement of the Weibull model or the NumPyro factor. The
-notebook uses a different NUTS key, so use the runner for the committed posterior.
+shared `make_trial()` helper raises `RuntimeError` if float64 is disabled to
+protect that reproduction. The notebook uses a different NUTS key, so use the
+runner for the committed posterior.
 
 The factor takes the `(N,)` per-patient likelihood inside the observation plate.
 The array calculation is already vectorized. The plate records independence

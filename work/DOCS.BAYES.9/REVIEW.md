@@ -1,6 +1,6 @@
 # DOCS.BAYES.9 — Bayesian RMST guidance handoff
 
-Independent review: round 1/3
+Independent review: round 2/3
 
 ## Read first
 
@@ -74,3 +74,25 @@ Weibull positional convention is explained locally using explicit keywords.
 No remaining sub-steps for issue #9; the optional adapter in #7 is separate.
 Integration and roadmap bookkeeping belong to the maintainer; issue #9 can be
 closed after integration. No publishing or remote changes were performed.
+
+## Round 1 response
+
+Reviewed commit: 78784ba8b186c2977075e0747f39f26e422fe9ff.
+Saved verdict: fix-first. Finding IDs: F-1, N-1, N-2.
+
+- F-1: replaced the hypothetical float32-trial wording in all three documents
+  with the actual `make_trial()` float64 RuntimeError guard. The model/factor
+  explanation continues to distinguish reproduction from model requirements.
+- N-1: removed the notebook's dangling colon before the added explanation.
+- N-2: explicitly placed the full-model import snippet at the repository root.
+- Reviewer reproduction check: 1 passed in 22.6s. The reviewer could not build
+  docs because its sandbox blocked Jupyter port binding, and did not run the
+  fast gate; the implementer's successful both-dtype gate/build remain above.
+- Post-fix `scripts/build_docs.sh`: exit 0, `Verified both dtypes`. Bayesian
+  page executed in 6.55s (x32) and 4.93s (x64). Checked the guard and repository
+  root instructions in both rendered HTML files. Notebook code-cell/output
+  equality against the step starting commit still passes.
+- `JAX_ENABLE_X64=0 uv run --group examples python` one-off guard probe:
+  caught the expected `RuntimeError: The Bayesian example requires
+  JAX_ENABLE_X64=1`. `git diff --check`: clean. The fast gate was not repeated
+  for these prose-only corrections; no runtime or notebook code changed.
