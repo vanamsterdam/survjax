@@ -103,7 +103,14 @@ def _reference(p, data, arm):
 
 def _objective(route, operation, p, data, arm):
     k, b, eta = jnp.exp(p[0]), jnp.exp(p[1]), p[2] * arm
-    if route == "unchecked":
+    if route == "numpyro":
+        import numpyro.distributions as nd
+
+        base = nd.Weibull(scale=b * jnp.exp(-eta / k), concentration=k)
+        values = nd.RightCensoredDistribution(base, censored=~data.exact).log_prob(
+            data.lower
+        )
+    elif route == "unchecked":
         # Moderate exact/right control only: no validation or tail guarantees.
         log_h = eta + k * (jnp.log(data.lower) - p[1])
         log_s = -jnp.exp(log_h)
@@ -127,7 +134,7 @@ def _objective(route, operation, p, data, arm):
     return values.sum()
 
 
-def _measure(n, mix, operation, dtype, warmups, repeats):
+def _measure(n, mix, operation, dtype, warmups, repeats, numpyro=False):
     (data, arm), preparation = _timed(lambda: _inputs(n, mix, dtype))
     p = jnp.asarray([np.log(1.3), np.log(2.0), 0.25], dtype=dtype)
     routes = ["ph", "equivalent"]
@@ -135,6 +142,8 @@ def _measure(n, mix, operation, dtype, warmups, repeats):
         routes.insert(1, "ph_generic")
     if mix in ("exact", "exact_right"):
         routes.append("unchecked")
+        if numpyro and operation == "likelihood":
+            routes.append("numpyro")
     cases = []
     for route in routes:
 
@@ -212,6 +221,11 @@ def _main():
     parser.add_argument("--sizes", type=int, nargs="+", default=[300, 30_000])
     parser.add_argument("--warmups", type=int, default=3)
     parser.add_argument("--repeats", type=int, default=30)
+    parser.add_argument(
+        "--numpyro",
+        action="store_true",
+        help="add the examples-group NumPyro exact/right control",
+    )
     args = parser.parse_args()
     if min(args.sizes) < 16 or args.warmups < 1 or args.repeats < 2:
         parser.error("require sizes >=16, warmups >=1 and repeats >=2")
@@ -236,7 +250,7 @@ def _main():
         "source_status": subprocess.check_output(
             ["git", "status", "--porcelain", "--", "src"], text=True
         ).strip(),
-        "command": f"JAX_ENABLE_X64={int(jax.config.x64_enabled)} JAX_PLATFORMS=cpu uv run python {shlex.join(sys.argv)}",
+        "command": f"JAX_ENABLE_X64={int(jax.config.x64_enabled)} JAX_PLATFORMS=cpu uv run {'--group examples ' if args.numpyro else ''}python {shlex.join(sys.argv)}",
         "python": platform.python_version(),
         "os": platform.platform(),
         "processor": processor,
@@ -245,7 +259,13 @@ def _main():
         "dtype": np.dtype(dtype).name,
         "versions": {
             name: importlib.metadata.version(name)
-            for name in ("jax", "jaxlib", "numpy", "survjax")
+            for name in (
+                "jax",
+                "jaxlib",
+                "numpy",
+                "survjax",
+                *(("numpyro",) if args.numpyro else ()),
+            )
         },
         "seed": SEED,
         "warmups": args.warmups,
@@ -259,7 +279,15 @@ def _main():
         for n in args.sizes:
             for mix in ("exact", "exact_right", "mixed", "truncated"):
                 rows.extend(
-                    _measure(n, mix, "likelihood", dtype, args.warmups, args.repeats)
+                    _measure(
+                        n,
+                        mix,
+                        "likelihood",
+                        dtype,
+                        args.warmups,
+                        args.repeats,
+                        args.numpyro,
+                    )
                 )
             for operation in ("log_survival", "log_prob"):
                 rows.extend(
