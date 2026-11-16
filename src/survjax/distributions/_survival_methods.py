@@ -182,11 +182,11 @@ def log_cdf_from_log_cumulative_hazard(
 def log_cdf(self: "SurvivalDistribution", t: ArrayLike) -> jax.Array:
     """Return the log probability of an event by time t, log F(t) = log(1 - S(t)).
 
-    The default never forms 1 - S. It uses log(-expm1(log S)) when S is
-    close to 1 (early times) and log1p(-exp(log S)) otherwise, so it keeps
-    relative precision in both tails: early, as long as log S itself is not
-    rounded to zero, and late, where log F is close to -S. Families with a
-    more accurate early tail override it, as the built-ins do.
+    The default uses log(-expm1(log S)). It retains lower-tail precision as
+    long as log S has not underflowed. Upper-tail values have absolute
+    accuracy and may round to zero, while parameter derivatives retain
+    relative accuracy. Use log_survival for the upper tail. Families with a
+    more accurate lower tail override this default, as the built-ins do.
 
     Args:
         t: Times, broadcast against ``batch_shape`` (pointwise; see

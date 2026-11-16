@@ -95,7 +95,7 @@ def _reference(p, time, family):
 @pytest.mark.parametrize("family", ["exponential", "weibull"])
 @pytest.mark.parametrize("method", METHODS)
 def test_tail_values_match_high_precision_ph_formulas(family, method, x64_enabled):
-    """Spec 4.4/7.2: scale before exp, recover tiny H0, retain both log tails."""
+    """Spec 4.4/7.2 rev 63: scale before exp; upper log F has absolute accuracy."""
     parameters, times = _inputs(family, x64_enabled)
     expected = np.array(
         [
@@ -107,13 +107,15 @@ def test_tail_values_match_high_precision_ph_formulas(family, method, x64_enable
     def evaluate(p, time):
         return getattr(_distribution(p, family), method)(time)
 
+    # Rev 63: log1mexp/caller values near zero use ordinary absolute accuracy.
+    atol = ATOL[x64_enabled] if method == "log_cdf" else TAIL_ATOL[x64_enabled]
     compiled = jax.jit(evaluate)
     for p, t, reference in zip(parameters, times, expected, strict=True):
         for value in (evaluate(p, t), compiled(p, t)):
             np.testing.assert_allclose(
                 value,
                 reference,
-                atol=TAIL_ATOL[x64_enabled],
+                atol=atol,
                 rtol=TAIL_RTOL[x64_enabled],
                 equal_nan=False,
             )
@@ -121,7 +123,7 @@ def test_tail_values_match_high_precision_ph_formulas(family, method, x64_enable
         np.testing.assert_allclose(
             evaluate_many(parameters, times),
             expected,
-            atol=TAIL_ATOL[x64_enabled],
+            atol=atol,
             rtol=TAIL_RTOL[x64_enabled],
             equal_nan=False,
         )

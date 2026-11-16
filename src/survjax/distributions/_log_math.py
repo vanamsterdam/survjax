@@ -23,20 +23,16 @@ def safe_log1mexp(x: jax.Array) -> jax.Array:
 
     For x<=0; zero gives -inf, -inf gives zero, positive/NaN inputs give NaN.
     Guarding zero avoids contaminating active parameter derivatives.
+    Upper-tail values may round to zero; their derivatives retain precision.
 
-    JAX 0.11.2's nn.log1mexp uses the opposite sign convention and a custom
-    JVP based on expm1(-x). Its second derivative can overflow internally
-    for large -x, poisoning otherwise finite Hessians (see mixed-objective test).
+    Highest-accuracy expm1 differentiates using exp(x), retaining small
+    upper-tail slopes that the default expm1(x)+1 derivative loses.
     """
     zero = x == 0
-    near_zero = x > -jnp.log(jnp.asarray(2, dtype=x.dtype))
-    # spec 7.2: both branches run under vmap; substitute before every log.
+    # spec 7.2: substitute at zero before log, including under vmap.
     substitute = jax.lax.stop_gradient(-jnp.ones_like(x))
-    expm1_input = jnp.where(near_zero & ~zero, x, substitute)
-    exp_input = jnp.where(~near_zero, x, substitute)
-    value = jnp.where(
-        near_zero, jnp.log(-jnp.expm1(expm1_input)), jnp.log1p(-jnp.exp(exp_input))
-    )
+    safe_x = jnp.where(zero, substitute, x)
+    value = jnp.log(-jax.lax.expm1(safe_x, accuracy=jax.lax.AccuracyMode.HIGHEST))
     return jnp.where(zero, -jnp.inf, value)
 
 

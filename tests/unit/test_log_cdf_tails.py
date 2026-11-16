@@ -7,7 +7,14 @@ import jax.numpy as jnp
 import mpmath as mp
 import numpy as np
 import pytest
-from impl_tolerances import DERIVATIVE_ATOL, DERIVATIVE_RTOL, TAIL_ATOL, TAIL_RTOL
+from impl_tolerances import (
+    ATOL,
+    DERIVATIVE_ATOL,
+    DERIVATIVE_RTOL,
+    RTOL,
+    TAIL_ATOL,
+    TAIL_RTOL,
+)
 from jax.test_util import check_grads
 from jax.typing import ArrayLike
 
@@ -68,7 +75,7 @@ def _mp_derivatives(family, time, parameters):
 
 
 def test_upper_tail_values_match_mpmath(family, x64_enabled):
-    """Spec 4.2/7.1/12.1: small negative log F must not round to zero."""
+    """Spec 4.2/7.2/12.1 rev 63: upper-tail log F has absolute accuracy."""
     parameters = _parameters(family)
     cumulative_hazards = np.array(
         [1.0, 20.1, 33.1, 54.6, 600.0 if x64_enabled else 70.0]
@@ -84,9 +91,9 @@ def test_upper_tail_values_match_mpmath(family, x64_enabled):
     method = _distribution(family, parameters).log_cdf
     for actual in (method(times), jax.jit(method)(times), jax.vmap(method)(times)):
         assert actual.dtype == parameters.dtype
-        assert np.all(np.asarray(actual) < 0)
+        assert np.all(np.asarray(actual) <= 0)
         np.testing.assert_allclose(
-            actual, expected, atol=TAIL_ATOL[x64_enabled], rtol=TAIL_RTOL[x64_enabled]
+            actual, expected, atol=ATOL[x64_enabled], rtol=RTOL[x64_enabled]
         )
 
 
@@ -113,8 +120,13 @@ def test_switch_and_upper_tail_parameter_derivatives(
         return _distribution(family, p).log_cdf(time)
 
     expected_value, gradient, hessian = _mp_derivatives(family, time, parameters)
+    np.testing.assert_allclose(
+        value(parameters),
+        expected_value,
+        atol=ATOL[x64_enabled],
+        rtol=RTOL[x64_enabled],
+    )
     for function, expected in (
-        (value, expected_value),
         (jax.jacfwd(value), gradient),
         (jax.jacrev(value), gradient),
         (jax.hessian(value), hessian),
@@ -242,5 +254,5 @@ def test_equal_length_grid_retains_upper_tails(family, x64_enabled):
     actual = jax.jit(_distribution(family, parameters).log_cdf_grid)(times)
     assert actual.shape == (2, 2)
     np.testing.assert_allclose(
-        actual, expected, atol=TAIL_ATOL[x64_enabled], rtol=TAIL_RTOL[x64_enabled]
+        actual, expected, atol=ATOL[x64_enabled], rtol=RTOL[x64_enabled]
     )

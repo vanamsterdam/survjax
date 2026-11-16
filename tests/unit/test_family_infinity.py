@@ -128,10 +128,10 @@ class Cure(Constant):
         return jnp.log(self.fraction + (1.0 - self.fraction) * remaining)
 
 
-def test_tiny_cure_fraction_keeps_log_cdf_infinity_relative_precision(x64_enabled):
-    """Spec 4.2/4.5/7.2: log F(inf)=log(1-p) stays negative for tiny p."""
+def test_tiny_cure_fraction_log_cdf_infinity_value_and_derivatives(x64_enabled):
+    """Spec 4.2/4.5/7.2 rev 63: tiny log F has absolute value accuracy, relative AD."""
     fraction = 1e-12
-    # S(inf)=p, hence log F(inf)=log1p(-p)=-p-p**2/2-..., not zero.
+    # S(inf)=p, hence log F(inf)=log1p(-p); rev 63 permits value rounding.
     expected = np.log1p(-fraction)
     dist = Cure(rate=2.0, fraction=fraction)
     for actual in (
@@ -140,7 +140,24 @@ def test_tiny_cure_fraction_keeps_log_cdf_infinity_relative_precision(x64_enable
         jax.vmap(dist.log_cdf)(jnp.array([jnp.inf])),
     ):
         np.testing.assert_allclose(
-            actual, expected, atol=TAIL_ATOL[x64_enabled], rtol=TAIL_RTOL[x64_enabled]
+            actual, expected, atol=ATOL[x64_enabled], rtol=RTOL[x64_enabled]
+        )
+    log_fraction = jnp.log(jnp.asarray(fraction))
+    p = np.exp(float(log_fraction))
+
+    def value(log_p):
+        return Cure(rate=2.0, fraction=jnp.exp(log_p)).log_cdf(jnp.inf)
+
+    # Hand derivatives in log p: -p/(1-p) and -p/(1-p)^2.
+    for transform, expected in (
+        (jax.grad, -p / (1 - p)),
+        (jax.hessian, -p / (1 - p) ** 2),
+    ):
+        np.testing.assert_allclose(
+            transform(value)(log_fraction),
+            expected,
+            atol=TAIL_ATOL[x64_enabled],
+            rtol=TAIL_RTOL[x64_enabled],
         )
 
 
