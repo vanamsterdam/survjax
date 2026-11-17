@@ -34,3 +34,14 @@
 - **The committed outputs include a wall time** ("1000 bootstrap analyses
   in 4.8 s"), which varies by machine.
 - **The notebook is 180 kB,** mostly the four PNG figures.
+
+## Round 2: maintainer comment
+
+- **Comment:** "markdown_table and standardized_difference should be
+  imported not defined".
+- **Change:** both helpers moved to `examples/aiptw_rmst/reporting.py`. The
+  page and the notebook now import them, and the notebook was regenerated.
+  The page's and notebook's numbers are unchanged.
+- **Checks:** ruff passes; `check_aiptw_notebook.py`: 2 passed;
+  `check_aiptw.py` float64: 7 passed; the docs build succeeded in both dtypes;
+  `check.sh --fast`: all gates passed.

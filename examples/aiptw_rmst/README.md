@@ -14,6 +14,7 @@ fictional biomarker.
   distribution (`UniformFollowUp`).
 - `analysis.py`: the propensity and outcome models, the estimators, the
   one-argument `analyse(data)` and the vmapped `bootstrap`.
+- `reporting.py`: the table helpers of the page and the notebook.
 
 From the repository root, open the notebook, or run the checks:
 
