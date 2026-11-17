@@ -107,9 +107,53 @@ same tolerances as BFGS, on 1,200 replicates of 500 patients:
   - It stalls on the Weibull model from the tutorial's starting point, where
     the Hessian is not positive definite. survreg avoids this with a better
     starting point.
-- **So the gap with R is the iteration count, not the language.** Closing it
-  would take survreg-style starting values and Newton steps, not a different
-  optimistix component.
+- **So the gap with R is the iteration count, not the language.** The next
+  section closes it with survreg-style starting values and Newton steps.
+
+## survreg's starting values and Newton–Raphson
+
+survreg (`survival:::survreg.fit`) starts in three stages:
+
+1. a moment estimate on the log-time scale, μ = mean(log t) + 0.572 and
+   σ = 2 sd(log t)/√1.64;
+2. the intercept-and-scale model (Weibull with no covariates), fitted by
+   Newton;
+3. full Newton–Raphson from there, with step halving. It stops when the
+   log likelihood changes by a relative 1e-9.
+
+This was reproduced in survjax in a scratch script. Steps 1 and 2 use the
+same formulas, with all covariate effects started at 0. Step 3 is a
+vmappable Newton: a `lax.while_loop` with an inner step-halving loop, and the
+`jax.hessian` of the same survjax likelihood. The propensity fit uses the same
+Newton from zero. All variants gave estimates identical to BFGS to about 1e-8
+on every replicate that converged.
+
+| Variant | Newton iterations per fit | 1,200 replicates, 500 patients | 1,200 replicates, 5,000 patients |
+| --- | --- | --- | --- |
+| BFGS (the tutorial) | 45 to 105 steps | 4.2 s | 41 s |
+| Newton, PH parameters | 5, but 6 replicates stall at 30 | 7.8 s | |
+| Newton in survreg's AFT parameters | 5 or 6, but 1 replicate stalls at 30 | 7.6 s | |
+| **Newton, PH parameters, \|eigenvalue\| Hessian** | **5 to 7, all converge** | **2.4 s** | **18 s** |
+| Newton, AFT parameters, \|eigenvalue\| Hessian | 5 to 7, all converge | 2.2 s | 21 s |
+| R, 1 core | | 3.9 s | 20 s |
+
+One analysis now takes 4.0 ms at 500 patients and 20 ms at 5,000 patients,
+against R's 3.0 ms and 18 ms.
+
+- **Starting values alone do not suffice.** From the null-model start, the
+  first full Newton step can land where the Hessian of the Weibull PH
+  likelihood is indefinite. One replicate had a smallest eigenvalue of −6.7.
+  The Newton direction then points uphill, and step halving cannot recover.
+  Under `vmap`, a single stalled replicate keeps the whole batch running to
+  the iteration cap.
+- **The fix is one line.** Taking `V diag(1/|w|) Vᵀ g` from the eigenvalues
+  `w` of the 7 × 7 Hessian ("saddle-free" Newton) makes every replicate
+  converge in at most 7 iterations. survreg's C code guards in a similar
+  way, with a generalised Cholesky.
+- **JAX now matches or beats single-core R in wall time,** and it is about
+  twice as fast as BFGS. It still uses about 9 cores to do so: 21 s of CPU
+  time for the 2.4 s run. Per core, R remains several times more efficient,
+  and R on 12 cores is still fastest.
 
 ## Reading the results
 

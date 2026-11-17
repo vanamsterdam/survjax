@@ -80,3 +80,19 @@ under "Damped Newton solvers".
 - **Neither reaches R.**
 
 The tutorial's `minimise` is unchanged; the scratch script is not committed.
+
+## Round 4: survreg starting values plus Newton (maintainer request)
+
+The variants and their timings are in the benchmark README, under "survreg's
+starting values and Newton–Raphson".
+
+- **Start:** survreg's moment estimate, then the null Weibull fitted by
+  Newton.
+- **Solver:** Newton with step halving, vmappable.
+- **Plain Newton stalls on a few replicates,** because the Hessian becomes
+  indefinite. This happens in both the PH and the AFT parameters.
+- **Flipping negative eigenvalues fixes it:** every replicate converges.
+- **Speed:** 2.4 s for 1,200 replicates of 500 patients (BFGS 4.2 s, R on
+  1 core 3.9 s). At 5,000 patients: 18 s (BFGS 41 s, R 20 s).
+- **The tutorial's `minimise` is unchanged.** The scratch script is not
+  committed.
