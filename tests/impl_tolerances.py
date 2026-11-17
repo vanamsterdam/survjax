@@ -28,6 +28,8 @@ ATOL = {True: 1e-10, False: 1e-5}
 RTOL = {True: 1e-8, False: 1e-4}
 
 # D-022: absolute tolerances would accept zero for representable tiny tails.
+# Rev 63 exempts log1mexp/caller values near zero: use ordinary ATOL there;
+# tiny parameter derivatives and lower-tail values still use zero TAIL_ATOL.
 # For H<=600 (x64), H<=80 (x32), log-H reconstruction contributes roughly
 # H*log(H)*eps relative error, below these targets, including AD derivatives.
 # A7 likelihoods depend on H itself, not exp(-H): relative power error scales

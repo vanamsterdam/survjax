@@ -183,9 +183,11 @@ def assert_rel_close(actual, expected, err_msg=""):
 
 
 def log1mexp(x):
-    """``log(1 - exp(x))`` for ``x <= 0`` in float64 NumPy, Maechler's split (spec 7.2, rev 25).
+    """``log(1 - exp(x))`` for ``x <= 0`` in float64 NumPy, Maechler's split.
 
-    An analytical reference, not survjax behaviour: ``log(-expm1(x))`` for
+    An analytical reference, not survjax behaviour (since rev 63, spec 7.2
+    requires only the single-branch ``log(-expm1(x))``; this reference keeps
+    relative precision so that it is accurate wherever it is compared): ``log(-expm1(x))`` for
     ``x > -log 2`` and ``log1p(-exp(x))`` otherwise, each accurate to a few
     ulps on its branch; ``log1mexp(0) = -inf``, ``log1mexp(-inf) = 0``.
     """

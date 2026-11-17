@@ -1,6 +1,6 @@
 # Test map
 
-Spec: revision 62 (see `.spec-seen`). Unchanged requirements keep their
+Spec: revision 63 (see `.spec-seen`). Unchanged requirements keep their
 earlier revision tags. Tests from the revision 10 decision (sections 6.2, 10.2,
 13) are tagged `rev 10`. Tests from the performance amendment (section 7.2),
 accepted in revision 11, are tagged `rev 11`. A4 tests derive from revision 11 and
@@ -247,6 +247,21 @@ likelihood entry points, censoring and truncation transformations) still hold,
 since pruning gives identical results (7.2) and supported rows are found by
 value; only their docstrings, which said "all metadata true", are reworded and
 retagged `rev 62`.
+Revision 63 (decision 0061; 4.1–4.3, 7.2, 12.1): `log1mexp` is single-branch,
+upper-tail `log F` is accurate in absolute terms and may round to zero, and
+12.1 exempts such values from zero absolute tolerance. Upper-tail `log_cdf`
+value checks now use the ordinary tolerances (`assert_close`) in
+`test_a4_log_cdf_upper_tail.py`, `test_a5_log_cdf_tails.py`,
+`test_a4_generic_defaults.py::test_default_log_cdf`, the `log_cdf` entries of
+`test_a5_closed_forms.py` and `test_a11_ph_direct_methods.py`, and the
+upper-tail left rows of `test_observation_censoring_numerics.py`. The
+branch-split value tests and the "negative, nonzero" assertions are removed;
+values and derivatives now span one `H` set from below `log 2` to the deep
+tail; derivatives keep relative accuracy with zero absolute tolerance, now at
+every `H` (the float64 references use overflow-free forms). New: lower-tail
+derivatives where `H` underflows (A5) and, under `observation.censoring`,
+upper-tail left-row and wide-interval derivatives and wide-interval values.
+All changed tests are tagged `rev 63`.
 Revision 55 (8.8, 12.2) brings
 the log-normal and log-logistic families forward; they are covered by the new
 features `family.lognormal` and `family.loglogistic` (`test_family_*.py`,
@@ -907,7 +922,7 @@ public extension interface; built-in families start at A5.
 | --- | --- | --- |
 | 8.1 | `survival(t)` is `P(T>t)`, i.e. `exp(log_survival(t))`. | `test_default_survival_is_exp_log_survival` |
 | 4.2 | default `cumulative_hazard = -log S`. | `test_default_cumulative_hazard_is_minus_log_survival` |
-| 4.2/7.2 | rev 25: default `log_cdf = log1mexp(log S)`, with zero absolute tolerance (`H=15`, `log F=-3e-7`). | `test_default_log_cdf` |
+| 4.2/7.2 | rev 63: default `log_cdf = log1mexp(log S)`, ordinary tolerances (`H=15`, `log F=-3e-7` is within rounding of zero, the 12.1 exception). | `test_default_log_cdf` |
 | 4.2 | the default `log_cdf` is accurate until `\|log S\|` underflows. | `test_default_log_cdf_keeps_precision_for_tiny_cdf` |
 | 4.2 | default `log_hazard = log(-d/dt log S)`; here `log r` at every time. | `test_default_log_hazard_constant_hazard` |
 | 8.1 | `hazard(t) = f(t)/S(t)`; here `r`. | `test_default_hazard_constant_hazard` |
@@ -1027,19 +1042,19 @@ input is NaN, the result is NaN; otherwise the policy value applies."
 | 4.5 | `hazard` beyond a finite support end is NaN from the generic default. | `test_default_hazard_is_nan_beyond_support_end` |
 | 4.5/12.1 | the same values eagerly and under `jit`. | `test_zero_survival_rule_agrees_under_jit` |
 
-### `test_a4_log_cdf_upper_tail.py`: generic `log_cdf` default in the upper tail (rev 25)
+### `test_a4_log_cdf_upper_tail.py`: generic `log_cdf` default from below `log 2` into the upper tail (rev 63)
 
 ConstHazard (`log S = -rate t`), `rate = 0.5`, `t = 2H`. `[h]` marks a
-parametrization over `H`: upper tail `20, 33, 55` and `70` (float32) or `600`
-(float64); derivatives at the split points `0.5, 0.69, 0.70, 1.2` and at
-`20, 33`.
+parametrization over `H = 0.5, 0.69, 0.70, 1.2, 20, 33, 55` and `70`
+(float32) or `600` (float64). Values: ordinary 12.1 tolerances (the rev 63
+`log1mexp` exception); derivatives: `helpers.tail_rtol`, zero absolute
+tolerance.
 
 | Spec section | Requirement covered | Test |
 | --- | --- | --- |
-| 4.2/12.1 | "never rounds a representable `log F` to zero": negative, nonzero, against mpmath `log1p(-exp(-H))`, zero absolute tolerance. | `test_default_log_cdf_in_upper_tail_is_negative_and_accurate[h]` |
-| 12.1 | the same under `jit` and `vmap`. | `test_default_log_cdf_upper_tail_under_jit`, `test_default_log_cdf_upper_tail_under_vmap_over_time` |
-| 7.2/12.1 | values on both sides of the `log1mexp` split `H = log 2`. | `test_default_log_cdf_on_both_sides_of_log1mexp_split` |
-| 7.3/12.1 | first and second rate derivatives (`grad`, `jacfwd`, rev-over-rev, fwd-over-rev) at the split and upper-tail points: `t/expm1(H)`. | `test_default_log_cdf_rate_derivatives[h]` |
+| 4.2/7.2/12.1 | "accurate in absolute terms and may round to zero once `S` is below the dtype's epsilon": against mpmath `log1p(-exp(-H))`, "values within the ordinary absolute tolerance". | `test_default_log_cdf_is_accurate_in_absolute_terms[h]` |
+| 12.1 | the same under `jit` and `vmap`. | `test_default_log_cdf_values_under_jit`, `test_default_log_cdf_values_under_vmap_over_time` |
+| 7.2/7.3/12.1 | "first and second parameter derivatives with relative accuracy" (`grad`, `jacfwd`, rev-over-rev, fwd-over-rev) at every `H`: `t/expm1(H)`. | `test_default_log_cdf_rate_derivatives[h]` |
 | 12.1 | `t = (0, interior, upper tail, +inf)` under `jax_debug_nans`. | `test_default_log_cdf_mixed_times_under_debug_nans` |
 
 ### `test_a4_nested.py`: nested distribution fields (rev 18)
@@ -1201,21 +1216,22 @@ parametrized over the seven Slice A direct methods (`log_survival`,
 | 4.2 | "Built-ins override [`log_hazard`] analytically"; the generic form cancels when `H` is large. | `test_exponential_log_hazard_in_upper_tail_is_analytic`, `test_exponential_hazard_in_upper_tail_is_analytic`, `test_weibull_log_hazard_in_upper_tail_is_analytic`, `test_weibull_hazard_in_upper_tail_is_analytic` |
 | 8.1 | `survival` underflows to `0`, not NaN. | `test_survival_underflows_to_zero_not_nan_in_upper_tail` |
 
-### `test_a5_log_cdf_tails.py`: built-in `log_cdf` in both tails (rev 25)
+### `test_a5_log_cdf_tails.py`: built-in `log_cdf` in both tails (rev 63)
 
 Exponential `r = 0.5` at `t = 2H`; Weibull `k = 2.5`, `b = 3` at
 `t = 3 H**(1/k)`, with `H` recomputed in mpmath from the rounded `t`. `[h]` as
 for `test_a4_log_cdf_upper_tail.py`; `[name]` over Exponential and Weibull
-(and ConstHazard for the grid). Upper-tail tolerance: `helpers.tail_rtol`,
-zero absolute tolerance, scale justified there (`S` has condition number `H`).
+(and ConstHazard for the grid). Values: ordinary 12.1 tolerances (rev 63
+exception); derivatives and lower tails: zero absolute tolerance,
+`helpers.tail_rtol` (`S` has condition number `H`).
 
 | Spec section | Requirement covered | Test |
 | --- | --- | --- |
-| 4.1/12.1 | upper tail "negative there and never rounds to zero", against mpmath, at `H` about 20, 33, 55 and deeper. | `test_exponential_log_cdf_in_upper_tail_is_negative_and_accurate[h]`, `test_weibull_log_cdf_in_upper_tail_is_negative_and_accurate[h]` |
-| 12.1 | the same "under `jit` and `vmap`, and through `log_cdf_grid`" (grid also for the generic default). | `test_upper_tail_log_cdf_under_jit[name]`, `test_upper_tail_log_cdf_under_vmap_over_time[name]`, `test_upper_tail_log_cdf_grid[name]` |
+| 4.1/7.2/12.1 | upper tail "has `log1mexp`'s absolute accuracy" and may round to zero: against mpmath from below `log 2` to the deep tail, ordinary tolerances. | `test_exponential_log_cdf_is_accurate_in_absolute_terms[h]`, `test_weibull_log_cdf_is_accurate_in_absolute_terms[h]` |
+| 12.1 | the same "under `jit` and `vmap`, and through `log_cdf_grid`" (grid also for the generic default). | `test_log_cdf_values_under_jit[name]`, `test_log_cdf_values_under_vmap_over_time[name]`, `test_log_cdf_values_through_grid[name]` |
 | 4.1/12.1 | lower tail "even where `H` or `F` underflows": `log F = log H`. | `test_exponential_log_cdf_where_cumulative_hazard_underflows`, `test_weibull_log_cdf_where_cumulative_hazard_underflows` |
-| 7.2/12.1 | values on both sides of the split `H = log 2`. | `test_log_cdf_on_both_sides_of_log1mexp_split[name]` |
-| 7.3/12.1 | first and second parameter derivatives at the split and upper-tail points (Exponential `t/expm1(H)`; Weibull in `k` and `b`). | `test_exponential_log_cdf_rate_derivatives[h]`, `test_weibull_log_cdf_shape_derivatives[h]`, `test_weibull_log_cdf_scale_derivatives[h]` |
+| 4.1/12.1 | lower tails "with relative accuracy of values and derivatives" (rev 63): Exponential `1/r`, `-1/r**2`; Weibull `log(t/b)`, `-k/b`, `k/b**2`. | `test_exponential_log_cdf_derivatives_where_cumulative_hazard_underflows`, `test_weibull_log_cdf_derivatives_where_cumulative_hazard_underflows` |
+| 7.2/7.3/12.1 | first and second parameter derivatives with relative accuracy at every `H` (Exponential `t/expm1(H)`; Weibull in `k` and `b`). | `test_exponential_log_cdf_rate_derivatives[h]`, `test_weibull_log_cdf_shape_derivatives[h]`, `test_weibull_log_cdf_scale_derivatives[h]` |
 | 12.1 | mixed `0`, interior, upper-tail, `+inf` times under `jax_debug_nans` (Weibull `k` in `0.5, 1, 2.5`). | `test_exponential_log_cdf_mixed_times_under_debug_nans`, `test_weibull_log_cdf_mixed_times_under_debug_nans[k]` |
 
 ### `test_a5_boundaries.py`: value policy and boundary values on built-ins
@@ -1877,7 +1893,7 @@ is ordinary range (7.3 exception).
 | 4.4/4.5 | `log_hazard` row `log h0(t) + eta` carries the baseline's limits at `t=0` and `t=+inf` (Weibull `k<1`, `k=1`, `k>1`; Exponential), equal to the equivalent Weibull (rev 43) | `test_ph_weibull_log_hazard_limits_carry_through`, `test_ph_weibull_hazard_limits_carry_through`, `test_ph_weibull_hazard_limits_equal_equivalent_weibull`, `test_ph_exponential_hazard_at_the_boundaries` |
 | 7.3/12.1 | values stay accurate at the 7.3 extreme-scaling examples (Weibull `eta=±720`; Exponential `rate=1e-200`, `eta=500`), float64, against mpmath | `test_extreme_scaling_weibull_values_stay_accurate`, `test_extreme_scaling_exponential_values_stay_accurate` |
 | 5 | scalar, paired and explicit time-first shapes against `(S, 2)`; non-broadcasting time `TypeError` | `test_scalar_time_against_draw_by_arm_batch`, `test_paired_time_vector_against_arms`, `test_explicit_time_first_axis`, `test_time_that_does_not_broadcast_is_rejected` |
-| 5 | every `_grid` twin equals `m(t[:, None, None])` with shape `(K, S, 2)`, unsorted/repeated `t`, `K=N`, non-1-D `t` `TypeError`, grid from `t=0`; the `log_cdf_grid` reference check is relative only where the reference `S` is a normal number in the active dtype (4.2, D-044) | `test_grid_twin_equals_time_first_direct_method`, `test_grid_with_as_many_times_as_entries_is_not_paired`, `test_grid_rejects_time_that_is_not_one_dimensional`, `test_grid_from_zero_includes_base_supplied_values` |
+| 5 | every `_grid` twin equals `m(t[:, None, None])` with shape `(K, S, 2)`, unsorted/repeated `t`, `K=N`, non-1-D `t` `TypeError`, grid from `t=0`; the `log_cdf_grid` reference check uses the ordinary tolerances (12.1, rev 63) | `test_grid_twin_equals_time_first_direct_method`, `test_grid_with_as_many_times_as_entries_is_not_paired`, `test_grid_rejects_time_that_is_not_one_dimensional`, `test_grid_from_zero_includes_base_supplied_values` |
 | 12.1 | eager/`jit`/`vmap` agreement for every method; result dtype | `test_methods_agree_under_jit`, `test_methods_agree_under_vmap`, `test_result_dtype_is_the_parameter_dtype` |
 
 ### `test_a11_ph_identities.py`
@@ -2125,7 +2141,8 @@ of the spec 2 table, values and `mpmath.diff` derivatives). Row builder
 | 7.3/12.1 | first and second derivatives: Exponential hand-derived (per-row Jacobians both modes, second derivatives three ways, shared-rate mixed batch); Weibull gradients and Hessians against mpmath; four fwd/rev Hessian compositions; `jit`, `vmap` over draws and datasets; `check_grads(order=2)` (float64) on Exponential, Weibull shared/per-row/`from_log`, `jit`/`vmap`, custom family; custom Hessian | `test_exponential_per_row_jacobian_is_hand_derived`, `test_exponential_left_and_interval_second_derivatives_are_hand_derived`, `test_exponential_shared_rate_mixed_batch_derivatives_are_hand_derived`, `test_weibull_left_and_interval_gradients_match_mpmath`, `test_weibull_mixed_batch_hessian_matches_mpmath`, `test_weibull_mixed_batch_gradient_matches_mpmath`, `test_forward_and_reverse_hessians_agree_with_mpmath`, `test_hessian_under_jit_matches_eager`, `test_hessian_under_vmap_over_parameter_draws`, `test_gradient_under_vmap_over_datasets`, `test_check_grads_*`, `test_custom_family_hessian_matches_mpmath` (derivatives) |
 | 7.1/7.2/7.3 | isolation of rows without parameter issues on censored rows (zero, negative, NaN, `+inf` scale), both modes, to second order; reference-input isolation for censored rows | `test_rows_without_parameter_issues_keep_derivatives`, `test_reference_input_does_not_reach_censored_row_gradients` (derivatives) |
 | 12.1 | cross-kind identities (hypothesis): interval `(c,+inf]` = right; `from_bounds(0,c)` = left; `logaddexp` of adjacent sets equals the union (left+interval, interval+interval, interval+right); left+right = 0; full coverage exactly zero | `test_interval_to_infinity_equals_right_censoring`, `test_bounds_from_zero_equals_left_censoring`, `test_left_plus_adjacent_interval_is_the_larger_left`, `test_adjacent_intervals_add_to_their_union`, `test_interval_plus_right_tail_is_the_earlier_right`, `test_left_plus_right_at_the_same_time_covers_everything`, `test_full_coverage_is_exactly_zero` (properties) |
-| 4.1/7.2/12.1/12.2 | tiny masses (left at `1e-30`, Weibull `H` underflow, tiny intervals); upper tails (left `log F ~ -S` at `H` = 20, 33, 55, 70/600; intervals with `H(a)` = 900–1000); narrow intervals (`2**-20`, `2**-40`) and Weibull increments; eager `jax_debug_nans` on valid mixed censored batches (Exponential, Weibull, per-row, custom, bounds form) | `test_exponential_left_row_at_tiny_time_keeps_relative_precision`, `test_weibull_left_row_where_the_cumulative_hazard_underflows`, `test_exponential_interval_at_tiny_times`, `test_weibull_interval_at_tiny_times`, `test_exponential_left_row_in_the_upper_tail`, `test_weibull_left_row_in_the_upper_tail`, `test_exponential_interval_deep_in_the_upper_tail`, `test_weibull_interval_deep_in_the_upper_tail`, `test_exponential_narrow_interval`, `test_weibull_narrow_interval_uses_cumulative_hazard_increments`, `test_*_under_debug_nans` (numerics) |
+| 4.1/7.2/12.1/12.2 | tiny masses (left at `1e-30`, Weibull `H` underflow, tiny intervals); upper tails (left `log F ~ -S` at `H` = 20, 33, 55, 70/600, ordinary tolerances since rev 63; intervals with `H(a)` = 900–1000); narrow intervals (`2**-20`, `2**-40`) and Weibull increments; eager `jax_debug_nans` on valid mixed censored batches (Exponential, Weibull, per-row, custom, bounds form) | `test_exponential_left_row_at_tiny_time_keeps_relative_precision`, `test_weibull_left_row_where_the_cumulative_hazard_underflows`, `test_exponential_interval_at_tiny_times`, `test_weibull_interval_at_tiny_times`, `test_exponential_left_row_in_the_upper_tail`, `test_weibull_left_row_in_the_upper_tail`, `test_exponential_interval_deep_in_the_upper_tail`, `test_weibull_interval_deep_in_the_upper_tail`, `test_exponential_narrow_interval`, `test_weibull_narrow_interval_uses_cumulative_hazard_increments`, `test_*_under_debug_nans` (numerics) |
+| 7.2/7.3/12.1 | rev 63: "likelihood rows with wide intervals and upper-tail left censoring, values and first and second derivatives": upper-tail left rows (Exponential in `r`, Weibull in `k`) and wide intervals `(0.25, 0.25 + H]` (Exponential), derivatives with relative accuracy and zero absolute tolerance, values with the ordinary tolerances; one mixed batch of both | `test_exponential_left_row_in_the_upper_tail_rate_derivatives`, `test_weibull_left_row_in_the_upper_tail_shape_derivatives`, `test_exponential_wide_interval_value`, `test_exponential_wide_interval_rate_derivatives`, `test_wide_interval_and_upper_tail_left_rows_in_one_batch` (numerics) |
 | 4.2/7.1/12.2 | `log_interval_prob(lower, upper)` (Slice B by 12.2 rev 54; call convention and reversed-endpoint value Q-065): values; `+inf` upper is `log_survival`; `0` lower is `log_cdf`; `(0,+inf]` is `0`; equal endpoints `-inf`; reversed NaN; improper `(c,+inf]` = `log S(c)`; broadcasting; agrees with the interval row; `jit` and gradient | `test_finite_interval_matches_reference`, `test_upper_infinite_endpoint_is_log_survival`, `test_zero_lower_endpoint_is_log_cdf`, `test_whole_line_is_log_one`, `test_equal_endpoints_give_zero_probability`, `test_reversed_endpoints_are_nan`, `test_improper_family_interval_to_infinity_includes_the_cure_mass`, `test_endpoints_broadcast_against_the_batch`, `test_member_agrees_with_the_interval_row_contribution`, `test_member_under_jit_and_its_gradient` (interval_prob) |
 
 Not tested for `observation.censoring`:

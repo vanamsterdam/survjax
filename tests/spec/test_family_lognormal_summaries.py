@@ -256,7 +256,12 @@ def test_rmst_at_a_large_cutoff_approaches_the_mean_from_below():
     mu, sigma = rounded(0.3, 0.8)
     (tau,) = rounded(math.exp(mu + 12 * sigma))
     got = float(np.asarray(_dist(mu, sigma).rmst(f(tau))))
-    assert got <= sref.lognormal_mean(mu, sigma) * (1 + 1e-12)
+    # The ordering holds for exact values; here the deficit mean - rmst is about
+    # mean * Phi(-12), far below any float, so the returned value is the mean
+    # rounded to the active dtype. Allow that rounding: a few ulps of the active
+    # dtype (float32: 8 eps ~ 9.5e-7), never less than the float64 slack 1e-12.
+    slack = max(1e-12, 8 * float(np.finfo(np.asarray(f(0.0)).dtype).eps))
+    assert got <= sref.lognormal_mean(mu, sigma) * (1 + slack)
     assert_rel_close(got, sref.lognormal_rmst(mu, sigma, tau))
 
 

@@ -192,11 +192,10 @@ class Exponential(SurvivalDistribution):
         """Return the log probability of an event by time t, log F(t).
 
         ``F(t) = 1 - exp(-rate * t)``. It is computed from
-        ``log H = log(rate) + log(t)``, so it keeps relative precision both for
-        very early times, where F is tiny (log F is close to log H), as long as
-        log H is representable, and for very late times, where log F is close
-        to -S(t), as long as S(t) is a normal floating-point number. Beyond
-        that S underflows and log F rounds to 0.
+        ``log H = log(rate) + log(t)`` to retain lower-tail precision wherever
+        log H is representable, even when H underflows. Upper-tail values have
+        absolute accuracy and may round to zero, while parameter derivatives
+        retain relative accuracy. Use log_survival for the upper tail.
 
         Args:
             t: Times, broadcast against ``batch_shape``.

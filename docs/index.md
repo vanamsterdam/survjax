@@ -33,6 +33,8 @@ Start with [survival data](survival-data.md) and
 Three documented use cases show how to [fit a Weibull distribution](use-cases/weibull-simulation.md) - or a whole lot of them in a simulation study,
 using survival likelihoods in neural networks on [MNIST](use-cases/survival-mnist.md), and how to do [Bayesian survival analysis](use-cases/bayesian-rmst.md) with survjax.
 Each of the use-cases include executable notebooks that you can run in your own environment.
+The advanced tutorials go further: a [doubly robust causal analysis](advanced/aiptw-rmst.md)
+estimates the effect of adjuvant chemotherapy on 5-year RMST from observational data.
 
 Likelihoods support exact events and right, left and interval censoring, with
 optional left/right truncation. Exponential, Weibull, LogNormal and LogLogistic
@@ -76,6 +78,13 @@ concordance
 use-cases/weibull-simulation
 use-cases/survival-mnist
 use-cases/bayesian-rmst
+```
+
+```{toctree}
+:maxdepth: 1
+:caption: Advanced survival analysis tutorials
+
+advanced/aiptw-rmst
 ```
 
 ```{toctree}
