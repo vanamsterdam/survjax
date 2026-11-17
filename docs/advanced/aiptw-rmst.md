@@ -468,6 +468,8 @@ who benefits; that needs far more patients.
 
 This analysis assumes no unmeasured confounding and positivity. The
 simulation guarantees both, but real data do not. The AIPTW estimator here
-weights the censoring with a known distribution, and it is not the fully
-efficient, censoring-augmented version of the estimator.
-<!-- WA question: what is the fully efficient censoring augmented version? -->
+weights the censoring with a known distribution. The fully efficient
+version adds a censoring augmentation term: patients censored before 5 years
+then count through their model-predicted RMST given survival to their
+censoring time, which narrows the interval (Tsiatis, *Semiparametric Theory
+and Missing Data*, Springer 2006, chapters 9 and 10).
