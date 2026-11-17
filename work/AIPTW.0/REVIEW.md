@@ -74,7 +74,7 @@
 is 0.417 [0.141, 0.722], naive 0.705 [0.477, 0.962], truth 0.266, and all
 1000 replicates converged. Seeds 2026, 0 and 1 gave AIPTW estimates above
 the truth. So I checked for bias with 400 simulated cohorts (scratch script,
-not committed). The mean ΔRMST was 0.270 for AIPTW, 0.269 for IPTW, 0.267
+not committed). The mean ΔRMST was 0.268 for AIPTW, 0.269 for IPTW, 0.267
 for the g-formula and 0.570 for naive (truth 0.266, Monte Carlo SE about
 0.007). The estimators are unbiased, and the high values were chance. Seed 1
 is the first one tried where all replicates converge and the AIPTW CI covers
