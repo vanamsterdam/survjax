@@ -5,6 +5,8 @@ jupytext:
 kernelspec:
   display_name: Python 3
   name: python3
+mystnb:
+  render_markdown_format: myst
 ---
 
 # Doubly robust causal survival analysis
@@ -28,9 +30,10 @@ built from two models:
   with a survjax likelihood.
 
 Administrative censoring is a **custom survjax distribution** of a few
-lines. The whole analysis is one pure function of the data, so the bootstrap
-of 1,000 resamples is a single `jax.vmap` that runs in seconds. The data are
-simulated, so we know the true answer.
+lines. We will write the whole analysis as one pure function of the data,
+so we can run the entire analysis on 1,000 bootstrap resamples in seconds
+with a single `jax.vmap`.
+The data are simulated, so we know the true answer.
 
 ```{code-cell} ipython3
 :tags: [remove-input]
@@ -50,23 +53,23 @@ sys.path.insert(0, str(ROOT))
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-from IPython.display import HTML, display
+from IPython.display import Markdown, display
 
-import survjax
-from examples.aiptw_rmst import analysis
-from examples.aiptw_rmst.cohort import (
-    TAU, UniformFollowUp, simulate_cohort, true_death_model, true_rmst, use_case_key,
+from examples.aiptw_rmst.analysis import (
+    analyse, bootstrap, counterfactual_rmst, fit_propensity, fit_weibull_ph,
+    outcome_design_matrix, propensity_scores, weibull_ph,
 )
+from examples.aiptw_rmst.cohort import TAU, simulate_cohort, true_death_model, true_rmst
 
 ARMS = ("Surgery alone", "Chemotherapy")
 COLORS = ("C0", "C1")
 
 
-def html_table(header, rows):
-    """A small HTML table from a header and rows of preformatted cells."""
-    head = "".join(f"<th>{h}</th>" for h in header)
-    body = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in row) + "</tr>" for row in rows)
-    return HTML(f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>")
+def markdown_table(header, rows):
+    """A Markdown table, rendered like the hand-written tables on this page."""
+    lines = ["| " + " | ".join(header) + " |", "|" + " --- |" * len(header)]
+    lines += ["| " + " | ".join(row) + " |" for row in rows]
+    return Markdown("\n".join(lines))
 
 
 def standardized_difference(x, treated, weight):
@@ -100,7 +103,9 @@ the hazard ratio for chemotherapy is 0.70 at an average SRS and about 0.81
 one standard deviation above it.
 
 ```{code-cell} ipython3
-data = simulate_cohort(use_case_key(0), n=500)
+key = jax.random.PRNGKey(1)
+data_key, bootstrap_key = jax.random.split(key)
+data = simulate_cohort(data_key, n=500)
 data.survival
 ```
 
@@ -119,11 +124,11 @@ for name, x in baseline.items():
     rows.append([name, *(f"{x[data.treated == a].mean():.1f}" for a in (0.0, 1.0)),
                  f"{standardized_difference(x, data.treated, jnp.ones(500)):+.2f}"])
 rows.append(["Patients", *(f"{int((data.treated == a).sum())}" for a in (0.0, 1.0)), ""])
-display(html_table(["", *ARMS, "Standardized difference"], rows))
+display(markdown_table(["", *ARMS, "Standardized difference"], rows))
 ```
 
 The chemotherapy patients are younger and less often frail. The SRS
-played no part in the decision, so its difference between the arms is
+played no part in the decision, so any difference between the arms is
 chance alone.
 
 ## Censoring as a custom survival distribution
@@ -131,19 +136,16 @@ chance alone.
 With administrative censoring, the follow-up window comes from the study
 dates, so we do not need to estimate it. Potential follow-up is uniform
 between 4 and 8 years, with censoring survival $G(t)=(8-t)/4$ inside that
-window. survjax has no uniform family, but writing one takes a
-`log_survival`, a `reference_time` and, because the support has hard
-edges, explicit `log_prob` and `log_hazard` overrides
-(see [custom distributions](../distributions.md)):
-
-```{literalinclude} ../../examples/aiptw_rmst/cohort.py
-:pyobject: UniformFollowUp
-```
-
-It is now a survjax distribution like any other, with batching, `jit` and
-every derived method:
+window. survjax has no uniform family, so we wrote one,
+`UniformFollowUp`, in
+{download}`follow_up.py <../../examples/aiptw_rmst/follow_up.py>`. It
+takes a few short methods (see [custom distributions](../distributions.md)
+for how). It is then a survjax distribution like any other, with batching,
+`jit` and every derived method:
 
 ```{code-cell} ipython3
+from examples.aiptw_rmst.follow_up import UniformFollowUp
+
 FOLLOW_UP = UniformFollowUp(start=4.0, end=8.0)
 t = jnp.array([3.0, 5.0, 7.0])
 FOLLOW_UP.survival(t), FOLLOW_UP.hazard(t)
@@ -152,9 +154,10 @@ FOLLOW_UP.survival(t), FOLLOW_UP.hazard(t)
 ## Who gets chemotherapy: the propensity score
 
 The propensity score $e(x)=P(A=1\mid X=x)$ is a logistic regression of
-treatment on all three covariates. The analyst does not know that the SRS is
-irrelevant to treatment, and including it costs little. NumPyro supplies the
-Bernoulli log likelihood and optimistix minimizes it:
+treatment on an intercept and all three covariates. The analyst does not
+know that the SRS is irrelevant to treatment, and including it costs little.
+NumPyro supplies the Bernoulli log likelihood, and a small `minimise`
+helper runs optimistix's BFGS:
 
 ```{literalinclude} ../../examples/aiptw_rmst/analysis.py
 :pyobject: fit_propensity
@@ -169,8 +172,8 @@ treatment (*positivity*). The fitted scores overlap well, with no patient
 close to 0 or 1:
 
 ```{code-cell} ipython3
-ps_theta, _ = analysis.fit_propensity(data)
-propensity = analysis.propensity_scores(ps_theta, data.covariates)
+ps_theta, _ = fit_propensity(data)
+propensity = propensity_scores(ps_theta, data.covariates)
 print(f"propensity scores from {propensity.min():.2f} to {propensity.max():.2f}")
 ```
 
@@ -186,8 +189,7 @@ fig.tight_layout()
 ```
 
 Weighting each patient by $1/\hat e$ (chemotherapy) or $1/(1-\hat e)$
-(surgery alone) removes the imbalance in the confounders, and the chance
-imbalance in the SRS with it:
+(surgery alone) removes the imbalance in the confounders:
 
 ```{code-cell} ipython3
 :tags: [remove-input]
@@ -195,16 +197,24 @@ ipt_weight = jnp.where(data.treated == 1, 1 / propensity, 1 / (1 - propensity))
 rows = [[name, f"{standardized_difference(x, data.treated, jnp.ones(500)):+.2f}",
          f"{standardized_difference(x, data.treated, ipt_weight):+.2f}"]
         for name, x in baseline.items()]
-display(html_table(["Standardized difference", "Unweighted", "Weighted"], rows))
+display(markdown_table(["Standardized difference", "Unweighted", "Weighted"], rows))
 ```
 
 ## What survival to expect: the outcome model
 
 The outcome model is a Weibull proportional hazards model with treatment,
 the three covariates and a prespecified treatment × SRS interaction, because
-the marker is a candidate predictor of benefit. The parameter vector holds
-the log shape, the log scale and five coefficients. One `ProportionalHazards`
-distribution holds one survival model per patient:
+the marker is a candidate predictor of benefit. Its design matrix has one
+row per patient and five columns:
+
+```{literalinclude} ../../examples/aiptw_rmst/analysis.py
+:pyobject: outcome_design_matrix
+```
+
+The parameter vector `theta` holds the log shape, the log scale and the five
+coefficients. Multiplying the design matrix by the coefficients gives every
+patient's log hazard ratio, so one `ProportionalHazards` distribution holds
+one survival model per patient:
 
 ```{literalinclude} ../../examples/aiptw_rmst/analysis.py
 :pyobject: weibull_ph
@@ -214,19 +224,26 @@ distribution holds one survival model per patient:
 :pyobject: fit_weibull_ph
 ```
 
+We fit the model on the treatments the patients actually received:
+
+```{code-cell} ipython3
+observed_X = outcome_design_matrix(data.treated, data.covariates)  # (500, 5)
+outcome_theta, _ = fit_weibull_ph(data.survival, observed_X)
+```
+
 From the fitted model we predict, for **every** patient, the 5-year RMST
-they would have had under each treatment. That is one closed-form
-`rmst` call on a batch of 500 distributions:
+they would have had under each treatment. We rebuild the design matrix with
+the treatment column set to 0 for everyone, and then to 1 for everyone.
+The covariates stay as observed. That is one closed-form `rmst` call on a
+batch of 500 distributions per treatment:
 
 ```{literalinclude} ../../examples/aiptw_rmst/analysis.py
 :pyobject: counterfactual_rmst
 ```
 
 ```{code-cell} ipython3
-design = analysis.outcome_design(data.treated, data.covariates)
-outcome_theta, _ = analysis.fit_weibull_ph(data.survival, design)
-rmst_0 = analysis.counterfactual_rmst(outcome_theta, data.covariates, 0.0)  # (500,)
-rmst_1 = analysis.counterfactual_rmst(outcome_theta, data.covariates, 1.0)  # (500,)
+rmst_0 = counterfactual_rmst(outcome_theta, data.covariates, 0.0)  # (500,) surgery alone
+rmst_1 = counterfactual_rmst(outcome_theta, data.covariates, 1.0)  # (500,) chemotherapy
 rmst_0[:3], rmst_1[:3]
 ```
 
@@ -272,7 +289,7 @@ model with treatment only), the g-formula, IPTW and AIPTW.
 ```
 
 ```{code-cell} ipython3
-estimates = jax.jit(analysis.analyse)(data)
+estimates = jax.jit(analyse)(data)
 for name in ("naive", "g_formula", "iptw", "aiptw"):
     rmst = getattr(estimates, name)
     print(f"{name:>9}: ΔRMST(5) = {rmst[1] - rmst[0]:.3f} years")
@@ -292,7 +309,7 @@ models from scratch:
 import time
 
 start = time.perf_counter()
-replicates = analysis.bootstrap(use_case_key(1), data, n_boot=1000)
+replicates = bootstrap(bootstrap_key, data, n_boot=1000)
 replicates.aiptw.block_until_ready()
 print(f"1000 bootstrap analyses in {time.perf_counter() - start:.1f} s, "
       f"{int(replicates.converged.sum())} with all fits converged")
@@ -306,7 +323,7 @@ between the patients who happened to get each treatment:
 
 ```{code-cell} ipython3
 :tags: [remove-input]
-truth = true_rmst(n_draws=1_000_000)
+truth = true_rmst(jax.random.PRNGKey(0), n_draws=1_000_000)
 true_delta = float(truth["causal"][1] - truth["causal"][0])
 naive_target = float(truth["naive"][1] - truth["naive"][0])
 
@@ -320,11 +337,12 @@ for name, label in labels.items():
     low, high = jnp.quantile(delta, jnp.array([0.025, 0.975]))
     rows.append([label, f"{point[0]:.2f}", f"{point[1]:.2f}",
                  f"{point[1] - point[0]:.3f}", f"[{low:.3f}, {high:.3f}]"])
-rows.append(["<b>Truth</b>", f"{truth['causal'][0]:.2f}", f"{truth['causal'][1]:.2f}",
-             f"{true_delta:.3f}", ""])
-display(html_table(["Estimator", "RMST(5), surgery", "RMST(5), chemo",
-                    "ΔRMST(5) (years)", "95% bootstrap CI"], rows))
-print(f"Target of the naive comparison: {naive_target:.3f} years")
+rows.append(["**Truth**", f"{truth['causal'][0]:.2f}", f"{truth['causal'][1]:.2f}",
+             f"**{true_delta:.3f}**", ""])
+rows.append(["Target of the naive comparison", f"{truth['naive'][0]:.2f}",
+             f"{truth['naive'][1]:.2f}", f"{naive_target:.3f}", ""])
+display(markdown_table(["Estimator", "RMST(5), surgery", "RMST(5), chemo",
+                        "ΔRMST(5) (years)", "95% bootstrap CI"], rows))
 ```
 
 In truth, chemotherapy adds about a quarter of a year, roughly 3 months,
@@ -358,7 +376,7 @@ g-formula RMST:
 times = jnp.linspace(0.0, 8.0, 161)
 fig, ax = plt.subplots(figsize=(6, 3.5))
 for a, (label, color) in enumerate(zip(ARMS, COLORS)):
-    fitted = analysis.weibull_ph(outcome_theta, analysis.outcome_design(float(a), data.covariates))
+    fitted = weibull_ph(outcome_theta, outcome_design_matrix(float(a), data.covariates))
     true_curve = true_death_model(data.covariates, float(a)).survival_grid(times).mean(axis=1)
     curve = fitted.survival_grid(times).mean(axis=1)  # (161, 500) -> (161,)
     ax.plot(times, curve, color=color, label=label)
@@ -385,8 +403,8 @@ reference = jnp.column_stack([jnp.zeros_like(srs), jnp.zeros_like(srs), srs])  #
 
 def benefit_by_srs(theta, covariates):
     """(41,) model-based ΔRMST(5) along the SRS grid."""
-    return (analysis.counterfactual_rmst(theta, covariates, 1.0)
-            - analysis.counterfactual_rmst(theta, covariates, 0.0))
+    return (counterfactual_rmst(theta, covariates, 1.0)
+            - counterfactual_rmst(theta, covariates, 0.0))
 
 
 band = jax.vmap(benefit_by_srs, in_axes=(0, None))(replicates.outcome_theta, reference)
@@ -407,9 +425,11 @@ ax.legend(frameon=False)
 fig.tight_layout()
 ```
 
-The benefit shrinks as the SRS rises, as built into the simulation. With 500
-patients the band is wide, so this is a description, not a test of
-heterogeneity.
+In truth the benefit shrinks as the SRS rises. With 500 patients, though, a
+treatment × marker interaction is poorly determined. In this cohort the
+estimate even slopes the wrong way, and the band is wide enough to hold
+either direction. Read such a curve as a description, not as evidence of
+who benefits; that needs far more patients or a dedicated trial.
 
 ## Takeaways
 
@@ -420,8 +440,9 @@ heterogeneity.
 - Writing the analysis as one pure function of the data makes the
   bootstrap a `vmap`. A thousand complete reanalyses take seconds.
 - Read the code in
-  {download}`cohort.py <../../examples/aiptw_rmst/cohort.py>` (simulation,
-  follow-up distribution and truth) and
+  {download}`cohort.py <../../examples/aiptw_rmst/cohort.py>` (simulation
+  and truth), {download}`follow_up.py <../../examples/aiptw_rmst/follow_up.py>`
+  (the censoring distribution) and
   {download}`analysis.py <../../examples/aiptw_rmst/analysis.py>` (models,
   estimators and bootstrap).
 

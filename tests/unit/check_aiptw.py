@@ -13,13 +13,10 @@ import survjax
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from examples.aiptw_rmst import analysis  # noqa: E402
-from examples.aiptw_rmst.cohort import (  # noqa: E402
-    FOLLOW_UP,
-    UniformFollowUp,
-    resample,
-    simulate_cohort,
-    use_case_key,
-)
+from examples.aiptw_rmst.cohort import resample, simulate_cohort  # noqa: E402
+from examples.aiptw_rmst.follow_up import FOLLOW_UP, UniformFollowUp  # noqa: E402
+
+KEY = jax.random.PRNGKey(1)
 
 pytestmark = pytest.mark.skipif(
     not jax.config.x64_enabled, reason="the tutorial runs in float64"
@@ -50,9 +47,9 @@ def test_uniform_follow_up_gradients_are_finite_on_both_sides_of_the_support():
 
 def test_propensity_likelihood_is_the_bernoulli_formula():
     """NumPyro's Bernoulli(logits) sum equals sum(A eta - log(1 + exp eta))."""
-    cohort = simulate_cohort(use_case_key(0), n=50)
+    cohort = simulate_cohort(KEY, n=50)
     theta = jnp.array([0.3, -0.5, -0.8, 0.1])
-    eta = analysis.with_intercept(cohort.covariates) @ theta
+    eta = theta[0] + cohort.covariates @ theta[1:]
     numpyro_sum = distributions.Bernoulli(logits=eta).log_prob(cohort.treated).sum()
     by_hand = jnp.sum(cohort.treated * eta - jnp.logaddexp(0.0, eta))
     np.testing.assert_allclose(numpyro_sum, by_hand, rtol=1e-12)
@@ -60,15 +57,15 @@ def test_propensity_likelihood_is_the_bernoulli_formula():
 
 def test_fits_reach_zero_score():
     """Each maximum likelihood fit has a zero gradient at its optimum."""
-    cohort = simulate_cohort(use_case_key(0))
+    cohort = simulate_cohort(KEY)
     theta, converged = analysis.fit_propensity(cohort)
     assert converged
-    design = analysis.outcome_design(cohort.treated, cohort.covariates)
-    outcome_theta, outcome_converged = analysis.fit_weibull_ph(cohort.survival, design)
+    X = analysis.outcome_design_matrix(cohort.treated, cohort.covariates)
+    outcome_theta, outcome_converged = analysis.fit_weibull_ph(cohort.survival, X)
     assert outcome_converged
 
     def outcome_nll(t):
-        return -analysis.weibull_ph(t, design).log_likelihood(cohort.survival).sum()
+        return -analysis.weibull_ph(t, X).log_likelihood(cohort.survival).sum()
 
     assert jnp.max(jnp.abs(jax.grad(outcome_nll)(outcome_theta))) < 1e-5
 
@@ -94,8 +91,8 @@ def test_censoring_weights_drop_unknown_status_and_upweight_the_rest():
 
 def test_vmapped_bootstrap_matches_a_loop():
     """jit(vmap(analyse)) over three resamples agrees with analysing them one by one."""
-    cohort = simulate_cohort(use_case_key(0))
-    key = use_case_key(1)
+    cohort = simulate_cohort(KEY)
+    key = jax.random.PRNGKey(2)
     batched = analysis.bootstrap(key, cohort, 3)
     indices = jax.random.randint(key, (3, len(cohort.treated)), 0, len(cohort.treated))
     for b, idx in enumerate(indices):

@@ -1,4 +1,4 @@
-"""Synthetic stage III colon cancer cohort, its follow-up and its true RMST; not library API."""
+"""Synthetic stage III colon cancer cohort and its true RMST; not library API."""
 
 import math
 from dataclasses import dataclass
@@ -8,8 +8,8 @@ import jax.numpy as jnp
 from jax.typing import ArrayLike
 
 import survjax
+from examples.aiptw_rmst.follow_up import FOLLOW_UP
 
-ROOT_KEY = 20261025  # shared by all use cases; this one folds in 4
 TAU = 5.0  # restriction time, years
 
 # Treatment: older and frail patients are less often given chemotherapy.
@@ -43,55 +43,6 @@ class Cohort:
 def resample(cohort: Cohort, idx: jax.Array) -> Cohort:
     """Select patients by (N,) row indices, for example a bootstrap draw."""
     return jax.tree.map(lambda leaf: leaf[idx], cohort)
-
-
-@survjax.register_family
-@dataclass(frozen=True)
-class UniformFollowUp(survjax.SurvivalDistribution):
-    """Administrative censoring: potential follow-up is uniform on [start, end].
-
-    Patients enter uniformly over ``end - start`` years and the analysis is
-    ``end`` years after the first entry, so nobody is censored before ``start``.
-    """
-
-    start: jax.Array = survjax.param()
-    end: jax.Array = survjax.param()
-
-    def _inside(self, t: jax.Array) -> tuple[jax.Array, jax.Array]:
-        """Mask of start <= t < end, and t with outside values replaced by the midpoint."""
-        inside = (t >= self.start) & (t < self.end)
-        # spec 7.2: substitute before the logs so unselected branches stay finite
-        return inside, jnp.where(inside, t, (self.start + self.end) / 2)
-
-    def log_survival(self, t: ArrayLike) -> jax.Array:
-        t = jnp.asarray(t)
-        inside, safe_t = self._inside(t)
-        log_s = jnp.log1p(-(safe_t - self.start) / (self.end - self.start))
-        return jnp.where(t < self.start, 0.0, jnp.where(inside, log_s, -jnp.inf))
-
-    # Hard support edges: override density and hazard rather than differentiate.
-    def log_prob(self, t: ArrayLike) -> jax.Array:
-        t = jnp.asarray(t)
-        inside, _ = self._inside(t)
-        return jnp.where(inside, -jnp.log(self.end - self.start), -jnp.inf)
-
-    def log_hazard(self, t: ArrayLike) -> jax.Array:
-        # Hazard 1 / (end - t) inside; at and beyond end it keeps its limit, +inf.
-        t = jnp.asarray(t)
-        inside, safe_t = self._inside(t)
-        log_h = -jnp.log(self.end - safe_t)
-        return jnp.where(t < self.start, -jnp.inf, jnp.where(inside, log_h, jnp.inf))
-
-    def reference_time(self) -> jax.Array:
-        return jnp.broadcast_to((self.start + self.end) / 2, self.batch_shape)
-
-
-FOLLOW_UP = UniformFollowUp(start=4.0, end=8.0)
-
-
-def use_case_key(stream: int) -> jax.Array:
-    """Key for stream 0 (cohort), 1 (bootstrap) or 2 (truth by Monte Carlo)."""
-    return jax.random.fold_in(jax.random.fold_in(jax.random.key(ROOT_KEY), 4), stream)
 
 
 def sample_covariates(key: jax.Array, n: int) -> jax.Array:
@@ -145,7 +96,7 @@ def simulate_cohort(key: jax.Array, n: int = 500) -> Cohort:
     return Cohort(survival, treated, covariates)
 
 
-def true_rmst(n_draws: int = 1_000_000) -> dict[str, jax.Array]:
+def true_rmst(key: jax.Array, n_draws: int = 1_000_000) -> dict[str, jax.Array]:
     """Monte Carlo truth over the covariate distribution, using closed-form RMST.
 
     Returns:
@@ -153,7 +104,7 @@ def true_rmst(n_draws: int = 1_000_000) -> dict[str, jax.Array]:
         E[RMST(TAU | 0, X) | A = 0] and E[RMST(TAU | 1, X) | A = 1], the
         target of an unadjusted comparison.
     """
-    covariates = sample_covariates(use_case_key(2), n_draws)
+    covariates = sample_covariates(key, n_draws)
     rmst = jnp.stack(
         [true_death_model(covariates, a).rmst(TAU) for a in (0.0, 1.0)], axis=-1
     )

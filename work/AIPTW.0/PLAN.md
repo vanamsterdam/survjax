@@ -50,8 +50,10 @@
 
 ## Files
 
-- `examples/aiptw_rmst/cohort.py`: `Cohort` pytree, `resample`,
-  `UniformFollowUp`, the simulation, and the Monte Carlo truth.
+- `examples/aiptw_rmst/cohort.py`: `Cohort` pytree, `resample`, the
+  simulation, and the Monte Carlo truth.
+- `examples/aiptw_rmst/follow_up.py`: `UniformFollowUp` (WA round 2: kept
+  off the page).
 - `examples/aiptw_rmst/analysis.py`: the propensity and outcome fits,
   per-patient counterfactual RMST, censoring weights, the naive, g-formula,
   IPTW and AIPTW estimators, `analyse` and `bootstrap`.

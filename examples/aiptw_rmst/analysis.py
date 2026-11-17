@@ -1,6 +1,5 @@
 """Doubly robust (AIPTW) estimate of the 5-year RMST difference; not library API."""
 
-from collections.abc import Callable
 from typing import NamedTuple
 
 import jax
@@ -9,7 +8,8 @@ import numpyro.distributions as distributions
 import optimistix as optx
 
 import survjax
-from examples.aiptw_rmst.cohort import FOLLOW_UP, TAU, Cohort, resample
+from examples.aiptw_rmst.cohort import TAU, resample
+from examples.aiptw_rmst.follow_up import FOLLOW_UP
 
 
 class Estimates(NamedTuple):
@@ -23,9 +23,7 @@ class Estimates(NamedTuple):
     converged: jax.Array  # () True when all three fits converged
 
 
-def minimise(
-    objective: Callable[[jax.Array], jax.Array], start: jax.Array
-) -> tuple[jax.Array, jax.Array]:
+def minimise(objective, start):
     """BFGS minimum of a smooth objective; returns (theta, converged)."""
     solution = optx.minimise(
         lambda theta, _: objective(theta),
@@ -40,68 +38,66 @@ def minimise(
 # Propensity score: logistic regression -------------------------------------
 
 
-def with_intercept(covariates: jax.Array) -> jax.Array:
-    """(N, 1 + p) design: a column of ones, then the covariates."""
-    return jnp.column_stack([jnp.ones(len(covariates)), covariates])
-
-
-def fit_propensity(cohort: Cohort) -> tuple[jax.Array, jax.Array]:
-    """Logistic regression of treatment on all three covariates."""
-    design = with_intercept(cohort.covariates)
+def fit_propensity(cohort):
+    """Logistic regression of treatment on an intercept and the three covariates."""
+    n = len(cohort.treated)
+    X_matrix = jnp.column_stack([jnp.ones(n), cohort.covariates])  # (N, 4)
 
     def negative_log_likelihood(theta):
-        treatment = distributions.Bernoulli(logits=design @ theta)
+        treatment = distributions.Bernoulli(logits=X_matrix @ theta)
         return -treatment.log_prob(cohort.treated).sum()
 
-    return minimise(negative_log_likelihood, jnp.zeros(design.shape[1]))
+    return minimise(negative_log_likelihood, jnp.zeros(X_matrix.shape[1]))
 
 
-def propensity_scores(theta: jax.Array, covariates: jax.Array) -> jax.Array:
-    """(N,) fitted probability of chemotherapy."""
-    return jax.nn.sigmoid(with_intercept(covariates) @ theta)
+def propensity_scores(theta, covariates):
+    """(N,) fitted probability of chemotherapy: intercept plus covariate effects."""
+    return jax.nn.sigmoid(theta[0] + covariates @ theta[1:])
 
 
 # Outcome model: Weibull proportional hazards ---------------------------------
 
 
-def outcome_design(treated: jax.Array, covariates: jax.Array) -> jax.Array:
-    """(N, 5): chemo, age, frail, SRS and the prespecified chemo x SRS term."""
-    treated = jnp.broadcast_to(treated, covariates.shape[:1])
+def outcome_design_matrix(treated, covariates):
+    """(N, 5) columns: chemo, age, frail, SRS and the chemo x SRS interaction."""
+    treated = jnp.broadcast_to(treated, covariates.shape[:1])  # a scalar sets everyone
     srs = covariates[:, 2]
     return jnp.column_stack([treated, covariates, treated * srs])
 
 
-def weibull_ph(theta: jax.Array, design: jax.Array) -> survjax.ProportionalHazards:
+def weibull_ph(theta, design_matrix):
     """theta = (log shape, log scale, coefficients): one distribution per row."""
-    baseline = survjax.Weibull.from_log(log_shape=theta[0], log_scale=theta[1])
+    log_shape, log_scale = theta[:2]
+    coefficients = theta[2:]
+    baseline = survjax.Weibull.from_log(log_shape=log_shape, log_scale=log_scale)
     return survjax.ProportionalHazards(
-        baseline=baseline, log_hazard_ratio=design @ theta[2:]
+        baseline=baseline, log_hazard_ratio=design_matrix @ coefficients
     )
 
 
-def fit_weibull_ph(
-    survival: survjax.SurvivalData, design: jax.Array
-) -> tuple[jax.Array, jax.Array]:
-    """Maximum likelihood Weibull PH fit of right-censored survival on a design."""
+def fit_weibull_ph(survival, design_matrix):
+    """Maximum likelihood Weibull PH fit of right-censored survival times."""
 
     def negative_log_likelihood(theta):
-        return -weibull_ph(theta, design).log_likelihood(survival).sum()
+        return -weibull_ph(theta, design_matrix).log_likelihood(survival).sum()
 
-    start = jnp.zeros(2 + design.shape[1]).at[1].set(jnp.log(survival.lower.mean()))
+    # Start at shape 1, scale = mean observed time, and no covariate effects.
+    start = jnp.zeros(2 + design_matrix.shape[1])
+    start = start.at[1].set(jnp.log(survival.lower.mean()))
     return minimise(negative_log_likelihood, start)
 
 
-def counterfactual_rmst(
-    theta: jax.Array, covariates: jax.Array, treated: float
-) -> jax.Array:
-    """(N,) model-based RMST(TAU) for every patient had they all had `treated`."""
-    return weibull_ph(theta, outcome_design(treated, covariates)).rmst(TAU)
+def counterfactual_rmst(theta, covariates, treated):
+    """(N,) model-based RMST(TAU) for every patient, had they all had `treated`."""
+    # Same covariates, but the treatment column set to `treated` for everyone.
+    counterfactual_X = outcome_design_matrix(treated, covariates)
+    return weibull_ph(theta, counterfactual_X).rmst(TAU)
 
 
 # Censoring: known administrative follow-up -----------------------------------
 
 
-def censoring_weights(survival: survjax.SurvivalData) -> jax.Array:
+def censoring_weights(survival):
     """(N,) inverse probability of censoring weights, 0 when the status at TAU is unknown."""
     time = survival.lower
     known_by_tau = survival.exact | (time >= TAU)
@@ -112,35 +108,32 @@ def censoring_weights(survival: survjax.SurvivalData) -> jax.Array:
 # Estimators -------------------------------------------------------------------
 
 
-def aiptw(outcome, ipcw, treated, propensity, rmst_0, rmst_1) -> jax.Array:
-    """(2,) augmented IPTW mean of min(T, TAU) per arm."""
-    estimates = []
-    for arm, model_rmst, p_arm in (
-        (0.0, rmst_0, 1 - propensity),
-        (1.0, rmst_1, propensity),
-    ):
-        weight = (treated == arm) * ipcw / p_arm
-        estimates.append(jnp.mean(model_rmst + weight * (outcome - model_rmst)))
-    return jnp.stack(estimates)
+def aiptw(outcome, ipcw, treated, propensity, rmst_0, rmst_1):
+    """(2,) augmented IPTW mean of min(T, TAU): (surgery alone, chemotherapy)."""
+    weight_0 = (1 - treated) * ipcw / (1 - propensity)
+    weight_1 = treated * ipcw / propensity
+    psi_0 = jnp.mean(rmst_0 + weight_0 * (outcome - rmst_0))
+    psi_1 = jnp.mean(rmst_1 + weight_1 * (outcome - rmst_1))
+    return jnp.stack([psi_0, psi_1])
 
 
-def iptw(outcome, ipcw, treated, propensity) -> jax.Array:
-    """(2,) weighted (Hajek) mean of min(T, TAU) per arm."""
-    estimates = []
-    for arm, p_arm in ((0.0, 1 - propensity), (1.0, propensity)):
-        weight = (treated == arm) * ipcw / p_arm
-        estimates.append(jnp.sum(weight * outcome) / jnp.sum(weight))
-    return jnp.stack(estimates)
+def iptw(outcome, ipcw, treated, propensity):
+    """(2,) weighted (Hajek) mean of min(T, TAU): (surgery alone, chemotherapy)."""
+    weight_0 = (1 - treated) * ipcw / (1 - propensity)
+    weight_1 = treated * ipcw / propensity
+    psi_0 = jnp.sum(weight_0 * outcome) / jnp.sum(weight_0)
+    psi_1 = jnp.sum(weight_1 * outcome) / jnp.sum(weight_1)
+    return jnp.stack([psi_0, psi_1])
 
 
-def naive_rmst(cohort: Cohort) -> tuple[jax.Array, jax.Array]:
+def naive_rmst(cohort):
     """(2,) RMST per arm from a Weibull PH model with treatment only."""
     theta, converged = fit_weibull_ph(cohort.survival, cohort.treated[:, None])
     per_arm = weibull_ph(theta, jnp.array([[0.0], [1.0]]))
     return per_arm.rmst(TAU), converged
 
 
-def analyse(data: Cohort) -> Estimates:
+def analyse(data):
     """The whole analysis of one cohort: fit, predict and estimate.
 
     A pure function of the data, so it can be jitted and vmapped over
@@ -149,8 +142,8 @@ def analyse(data: Cohort) -> Estimates:
     ps_theta, ps_converged = fit_propensity(data)
     propensity = propensity_scores(ps_theta, data.covariates)
 
-    design = outcome_design(data.treated, data.covariates)
-    outcome_theta, outcome_converged = fit_weibull_ph(data.survival, design)
+    observed_X = outcome_design_matrix(data.treated, data.covariates)
+    outcome_theta, outcome_converged = fit_weibull_ph(data.survival, observed_X)
     rmst_0 = counterfactual_rmst(outcome_theta, data.covariates, 0.0)
     rmst_1 = counterfactual_rmst(outcome_theta, data.covariates, 1.0)
 
@@ -168,7 +161,7 @@ def analyse(data: Cohort) -> Estimates:
     )
 
 
-def bootstrap(key: jax.Array, data: Cohort, n_boot: int) -> Estimates:
+def bootstrap(key, data, n_boot):
     """Analyse n_boot resamples with replacement in one vmapped, compiled call."""
     n = len(data.treated)
     indices = jax.random.randint(key, (n_boot, n), 0, n)

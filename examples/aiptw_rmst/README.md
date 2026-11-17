@@ -7,8 +7,9 @@ including a 1,000-replicate bootstrap; read it on the
 [docs page](../../docs/advanced/aiptw-rmst.md). All data are synthetic, and
 the stromal radiomic score is a fictional biomarker.
 
-- `cohort.py`: the simulated cohort, the administrative follow-up as a custom
-  survjax distribution (`UniformFollowUp`) and the true values.
+- `cohort.py`: the simulated cohort and the true values.
+- `follow_up.py`: the administrative follow-up as a custom survjax
+  distribution (`UniformFollowUp`).
 - `analysis.py`: the propensity and outcome models, the estimators, the
   one-argument `analyse(data)` and the vmapped `bootstrap`.
 
