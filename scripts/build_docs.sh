@@ -3,8 +3,8 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: scripts/build_docs.sh [--output-dir DIR]"
-  echo "Build both dtype modes; DIR defaults to docs/_build in this worktree."
+  echo "usage: scripts/build_docs.sh [--output-dir DIR] [--dtype both|x32|x64]"
+  echo "Build both dtype modes by default; DIR defaults to docs/_build in this worktree."
   echo "Relative DIR paths are resolved from the caller's current directory."
 }
 
@@ -18,6 +18,8 @@ if [[ "$OSTYPE" == msys* || "$OSTYPE" == cygwin* ]]; then
   python_path_separator=';'
 fi
 output_root="$repo_dir/docs/_build"
+dtype_modes="0 1"
+dtype_label="x32 x64"
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --output-dir)
@@ -29,6 +31,15 @@ while [ "$#" -gt 0 ]; do
       shift 2
       ;;
     -h|--help) usage; exit 0 ;;
+    --dtype)
+      case "${2-}" in
+        both) dtype_modes="0 1"; dtype_label="x32 x64" ;;
+        x32) dtype_modes="0"; dtype_label="x32" ;;
+        x64) dtype_modes="1"; dtype_label="x64" ;;
+        *) usage >&2; exit 2 ;;
+      esac
+      shift 2
+      ;;
     *) usage >&2; exit 2 ;;
   esac
 done
@@ -79,7 +90,7 @@ status=$(git status --porcelain --untracked-files=normal)
 # Track source edits during execution; dirty builds are allowed but labelled.
 fingerprint=$(git diff HEAD --binary | git hash-object --stdin)
 started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-printf 'commit: %s\nstarted_utc: %s\ndtypes: x32 x64\n' "$commit" "$started" >> "$identity"
+printf 'commit: %s\nstarted_utc: %s\ndtypes: %s\n' "$commit" "$started" "$dtype_label" >> "$identity"
 if [ -n "$status" ]; then
   printf 'tree: dirty\n%s\n' "$status" >> "$identity"
 else
@@ -99,7 +110,7 @@ export JUPYTER_PREFER_ENV_PATH=1
 echo "MNIST cache: ${SURVJAX_EXAMPLES_DATA-~/.cache/survjax-examples/mnist}"
 echo "Build identity: $identity"
 
-for mode in 0 1; do
+for mode in $dtype_modes; do
   if [ "$mode" = 1 ]; then
     output="$output_root/html-x64"
   else
@@ -117,5 +128,8 @@ if [ "$commit" != "$(git rev-parse HEAD)" ] ||
   exit 1
 fi
 printf 'completed_utc: %s\nstate: success\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$identity"
-echo "Verified both dtypes. Identity: $identity"
-printf 'HTML: %s/index.html\n' "$output_root/html-x32" "$output_root/html-x64"
+echo "Verified dtypes: $dtype_label. Identity: $identity"
+for mode in $dtype_modes; do
+  if [ "$mode" = 1 ]; then suffix=x64; else suffix=x32; fi
+  printf 'HTML: %s/index.html\n' "$output_root/html-$suffix"
+done

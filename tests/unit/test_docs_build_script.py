@@ -130,9 +130,45 @@ def test_docs_build_stops_after_failed_dtype(docs_builder, tmp_path, monkeypatch
     assert len(log.read_text().splitlines()) == 1
 
 
+@pytest.mark.parametrize("dtype,mode", [("x32", "0"), ("x64", "1")])
+def test_selected_dtype_certifies_and_prints_only_that_output(
+    docs_builder, tmp_path, dtype, mode
+):
+    """A hosted build executes one mode without certifying stale other-mode HTML."""
+    script, repo, log = docs_builder
+    other = "x64" if dtype == "x32" else "x32"
+    stale = repo / f"docs/_build/html-{other}/index.html"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("earlier build")
+    result = subprocess.run(
+        [*script, "--dtype", dtype], cwd=tmp_path, capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    calls = [json.loads(line) for line in log.read_text().splitlines()]
+    assert len(calls) == 1
+    assert calls[0]["env"]["JAX_ENABLE_X64"] == mode
+    assert Path(calls[0]["argv"][-1]) == repo / f"docs/_build/html-{dtype}"
+    identity = (repo / "docs/_build/build-identity.txt").read_text()
+    assert f"dtypes: {dtype}\n" in identity
+    assert "dtypes: x32 x64" not in identity
+    assert identity.endswith("state: success\n")
+    assert f"html-{dtype}/index.html" in result.stdout
+    assert f"html-{other}/index.html" not in result.stdout
+    assert stale.read_text() == "earlier build"
+
+
 @pytest.mark.parametrize(
     "args",
-    [["--unknown"], ["--output-dir"], ["--output-dir", ""], ["--output-dir", "--help"]],
+    [
+        ["--unknown"],
+        ["--output-dir"],
+        ["--output-dir", ""],
+        ["--output-dir", "--help"],
+        ["--dtype"],
+        ["--dtype", ""],
+        ["--dtype", "float64"],
+        ["--dtype", "--help"],
+    ],
 )
 def test_docs_build_rejects_invalid_arguments_before_building(
     docs_builder, tmp_path, args

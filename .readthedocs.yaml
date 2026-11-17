@@ -1,4 +1,4 @@
-# Custom jobs preserve the executable, both-dtype pipeline and locked groups.
+# Publish the executed float64 site; the local verification command builds both.
 # https://docs.readthedocs.com/platform/stable/build-customization.html
 version: 2
 
@@ -15,7 +15,7 @@ build:
       - uv sync --locked --group docs --group examples
     build:
       html:
-        - scripts/build_docs.sh
-        # Publish one complete site, only after both dtype builds succeed.
+        - scripts/build_docs.sh --dtype x64
+        # Publish one complete site only after its strict executed build succeeds.
         - mkdir -p "$READTHEDOCS_OUTPUT/html"
         - cp -a docs/_build/html-x64/. "$READTHEDOCS_OUTPUT/html/"

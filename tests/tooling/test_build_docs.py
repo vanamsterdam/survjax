@@ -60,9 +60,9 @@ fi
     return repo
 
 
-def run_build(repo, bash_executable, action=""):
+def run_build(repo, bash_executable, action="", dtype="both"):
     return subprocess.run(
-        [bash_executable, "scripts/build_docs.sh"],
+        [bash_executable, "scripts/build_docs.sh", "--dtype", dtype],
         cwd=repo,
         env={
             **os.environ,
@@ -121,3 +121,15 @@ def test_further_edit_to_already_dirty_file_invalidates_success(
     record = (checkout / "docs/_build/build-identity.txt").read_text()
     assert "state: success" not in record
     assert "state: failed" in record
+
+
+def test_failed_single_dtype_rebuild_invalidates_pair_certificate(
+    checkout, bash_executable
+):
+    assert run_build(checkout, bash_executable).returncode == 0
+    result = run_build(checkout, bash_executable, "fail", dtype="x64")
+    assert result.returncode == 9
+    record = (checkout / "docs/_build/build-identity.txt").read_text()
+    assert "dtypes: x64\n" in record
+    assert "state: success" not in record
+    assert record.endswith("state: failed\nexit: 9\n")
