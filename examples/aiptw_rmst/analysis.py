@@ -164,5 +164,10 @@ def analyse(data):
 def bootstrap(key, data, n_boot):
     """Analyse n_boot resamples with replacement in one vmapped, compiled call."""
     n = len(data.treated)
-    indices = jax.random.randint(key, (n_boot, n), 0, n)
-    return jax.jit(jax.vmap(lambda idx: analyse(resample(data, idx))))(indices)
+    indices = jax.random.randint(key, (n_boot, n), 0, n)  # one row per replicate
+
+    def analyse_resample(idx):
+        return analyse(resample(data, idx))
+
+    analyse_all = jax.vmap(analyse_resample)  # over the rows of `indices`
+    return jax.jit(analyse_all)(indices)  # compiled once, for all replicates

@@ -85,3 +85,18 @@ page prose now says so.
 Checks: ruff and format pass; `check_aiptw.py` float64 7 passed; docs build
 succeeded in both dtypes (tables and figures inspected); `check.sh --fast`
 4633 passed, 93 skipped.
+
+## Round 3: maintainer WA comments (fix-up commit)
+
+| WA comment | Change |
+| --- | --- |
+| Define `minimise` before its use | The page shows `minimise` first, then `fit_propensity` |
+| `analyse` uses `Estimates` without showing it | The page now shows `Estimates`, and also `naive_rmst` and `iptw`, which `analyse` calls but the page did not show |
+| Nested `jit(vmap(lambda ...))` hard to read | `bootstrap` names `analyse_resample` and `analyse_all` and applies `jit` on its own line; the prose explains each step |
+| `in_axes=(0, None)` is advanced | `benefit_by_srs(theta)` closes over `reference`, so it is a plain `vmap` |
+| Is the `analysis.py` link needed? | Every analysis function is now on the page; the link stays as the one file that has them with their imports |
+| "Fully efficient" question | Answered to the maintainer in the terminal; the page is unchanged there for now |
+
+The results are unchanged (AIPTW 0.417 [0.141, 0.722], with all 1000
+replicates converged). Checks: ruff and format pass, `check_aiptw.py`
+float64 7 passed, and the docs build succeeded in both dtypes.

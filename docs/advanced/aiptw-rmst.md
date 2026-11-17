@@ -156,15 +156,17 @@ FOLLOW_UP.survival(t), FOLLOW_UP.hazard(t)
 The propensity score $e(x)=P(A=1\mid X=x)$ is a logistic regression of
 treatment on an intercept and all three covariates. The analyst does not
 know that the SRS is irrelevant to treatment, and including it costs little.
-NumPyro supplies the Bernoulli log likelihood, and a small `minimise`
-helper runs optimistix's BFGS:
-
-```{literalinclude} ../../examples/aiptw_rmst/analysis.py
-:pyobject: fit_propensity
-```
+Both models in this tutorial are fitted by maximum likelihood with one small
+helper around optimistix's BFGS:
 
 ```{literalinclude} ../../examples/aiptw_rmst/analysis.py
 :pyobject: minimise
+```
+
+NumPyro supplies the Bernoulli log likelihood of the logistic regression:
+
+```{literalinclude} ../../examples/aiptw_rmst/analysis.py
+:pyobject: fit_propensity
 ```
 
 Weighting only works if every kind of patient could have received either
@@ -281,8 +283,23 @@ model is correct. That is the double robustness.
 ## The whole analysis as one function
 
 `analyse` takes the data and nothing else. It fits both models, predicts and
-returns the per-arm RMST from four estimators: a naive comparison (a Weibull
-model with treatment only), the g-formula, IPTW and AIPTW.
+returns the per-arm RMST from four estimators. Besides the g-formula and
+AIPTW, these are a naive comparison, a Weibull model with treatment only,
+and IPTW, the weighted mean without the outcome model:
+
+```{literalinclude} ../../examples/aiptw_rmst/analysis.py
+:pyobject: naive_rmst
+```
+
+```{literalinclude} ../../examples/aiptw_rmst/analysis.py
+:pyobject: iptw
+```
+
+The results go into a named tuple, so that they stay a JAX pytree:
+
+```{literalinclude} ../../examples/aiptw_rmst/analysis.py
+:pyobject: Estimates
+```
 
 ```{literalinclude} ../../examples/aiptw_rmst/analysis.py
 :pyobject: analyse
@@ -297,9 +314,12 @@ for name in ("naive", "g_formula", "iptw", "aiptw"):
 
 ## Bootstrap confidence intervals in one `vmap`
 
-Because `analyse` is a pure JAX function, the nonparametric bootstrap is a
-`vmap` over resampled row indices, compiled once. Each replicate refits both
-models from scratch:
+Because `analyse` is a pure JAX function, the nonparametric bootstrap needs
+no loop. We draw a table of patient indices, one row per replicate.
+`resample` (from `cohort.py`) picks those rows out of every array in the
+data. `jax.vmap` turns the analysis of one resample into the analysis of all
+rows of the table at once, and `jax.jit` compiles that into a single
+program. Each replicate refits both models from scratch:
 
 ```{literalinclude} ../../examples/aiptw_rmst/analysis.py
 :pyobject: bootstrap
@@ -401,13 +421,13 @@ srs = jnp.linspace(-2.0, 2.0, 41)
 reference = jnp.column_stack([jnp.zeros_like(srs), jnp.zeros_like(srs), srs])  # age 66, not frail
 
 
-def benefit_by_srs(theta, covariates):
-    """(41,) model-based ΔRMST(5) along the SRS grid."""
-    return (counterfactual_rmst(theta, covariates, 1.0)
-            - counterfactual_rmst(theta, covariates, 0.0))
+def benefit_by_srs(theta):
+    """(41,) model-based ΔRMST(5) along the SRS grid, for one fitted outcome model."""
+    return (counterfactual_rmst(theta, reference, 1.0)
+            - counterfactual_rmst(theta, reference, 0.0))
 
 
-band = jax.vmap(benefit_by_srs, in_axes=(0, None))(replicates.outcome_theta, reference)
+band = jax.vmap(benefit_by_srs)(replicates.outcome_theta)  # (1000, 41)
 ```
 
 ```{code-cell} ipython3
@@ -417,7 +437,7 @@ true_benefit = (true_death_model(reference, 1.0).rmst(TAU)
 low, high = jnp.quantile(band, jnp.array([0.025, 0.975]), axis=0)
 fig, ax = plt.subplots(figsize=(6, 3))
 ax.fill_between(srs, low, high, color="C2", alpha=0.2, label="95% bootstrap band")
-ax.plot(srs, benefit_by_srs(outcome_theta, reference), color="C2", label="Estimate")
+ax.plot(srs, benefit_by_srs(outcome_theta), color="C2", label="Estimate")
 ax.plot(srs, true_benefit, color="black", linestyle="--", label="Truth")
 ax.axhline(0, color="0.5", linewidth=0.8)
 ax.set(xlabel="stromal radiomic score (SD)", ylabel="ΔRMST(5) (years)")
@@ -429,7 +449,7 @@ In truth the benefit shrinks as the SRS rises. With 500 patients, though, a
 treatment × marker interaction is poorly determined. In this cohort the
 estimate even slopes the wrong way, and the band is wide enough to hold
 either direction. Read such a curve as a description, not as evidence of
-who benefits; that needs far more patients or a dedicated trial.
+who benefits; that needs far more patients.
 
 ## Takeaways
 
@@ -439,14 +459,15 @@ who benefits; that needs far more patients or a dedicated trial.
   RMST and the custom distribution. NumPyro and optimistix do the rest.
 - Writing the analysis as one pure function of the data makes the
   bootstrap a `vmap`. A thousand complete reanalyses take seconds.
-- Read the code in
-  {download}`cohort.py <../../examples/aiptw_rmst/cohort.py>` (simulation
-  and truth), {download}`follow_up.py <../../examples/aiptw_rmst/follow_up.py>`
-  (the censoring distribution) and
-  {download}`analysis.py <../../examples/aiptw_rmst/analysis.py>` (models,
-  estimators and bootstrap).
+- Every analysis function is shown above;
+  {download}`analysis.py <../../examples/aiptw_rmst/analysis.py>` has them
+  in one file with their imports. The simulation and the true values are in
+  {download}`cohort.py <../../examples/aiptw_rmst/cohort.py>`, and the
+  censoring distribution is in
+  {download}`follow_up.py <../../examples/aiptw_rmst/follow_up.py>`.
 
 This analysis assumes no unmeasured confounding and positivity. The
 simulation guarantees both, but real data do not. The AIPTW estimator here
 weights the censoring with a known distribution, and it is not the fully
 efficient, censoring-augmented version of the estimator.
+<!-- WA question: what is the fully efficient censoring augmented version? -->
