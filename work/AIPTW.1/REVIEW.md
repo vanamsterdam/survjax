@@ -52,3 +52,18 @@
   starting values.
 - **The independent-review skill** is unavailable in this session, so it was
   not run.
+
+## Round 2: other ways to parallelise (maintainer question)
+
+The maintainer asked about vmapping 10 replicates at a time with the rest in
+series, and about `pmap` over 12 cores. The results are in the benchmark
+README, under "Other ways to spread the replicates".
+
+- **`lax.map` with `batch_size`:** smaller batches are only slower.
+- **`pmap` and `shard_map`:** both fail inside optimistix with lineax's
+  structure check.
+- **12 worker processes:** they scale poorly.
+- **The main finding:** one JAX CPU process already keeps about 5.8 cores
+  busy, so the "1 device" column is not single-core. The README now says so.
+
+The scratch scripts are not committed.
