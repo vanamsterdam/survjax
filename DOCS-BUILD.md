@@ -9,6 +9,7 @@ can call this script; it does not need to own or rewrite the documentation.
 ```sh
 scripts/build_docs.sh
 scripts/build_docs.sh --output-dir /tmp/survjax-docs-review
+scripts/build_docs.sh --dtype x64
 scripts/build_docs.sh --help
 ```
 
@@ -19,9 +20,13 @@ scripts/build_docs.sh --help
   treating generated files as documentation sources. The repo/docs roots are
   rejected. Do not point this option at an existing source or data directory:
   the build owns its contents, including a generated `.gitignore`.
-- Both float32 and float64 always build. Successful output is
-  `DIR/html-x32/index.html` and `DIR/html-x64/index.html`.
-- Exit 0 means both builds succeeded; help also exits 0. Invalid arguments or
+- Both float32 and float64 build by default (`--dtype both`). This is the
+  full verification command. `--dtype x32` or `--dtype x64` executes only
+  that mode. Read the Docs selects x64, the site it publishes, to avoid
+  duplicate execution within its 15-minute build budget.
+- Successful output is `DIR/html-x32/index.html` and/or
+  `DIR/html-x64/index.html` for the selected modes.
+- Exit 0 means all selected builds succeeded; help also exits 0. Invalid arguments or
   rejected output paths exit 2. Dependency, notebook and Sphinx failures return
   nonzero; the script stops at the first failed command. A failed build may
   leave partial output, so a portal should keep serving its last successful
@@ -88,12 +93,13 @@ Do not infer successful status from a directory's existence.
 
 Read `DIR/build-identity.txt` (default `docs/_build/build-identity.txt`). The
 last `state:` must be `success`, with the intended absolute checkout, commit,
-dirty status, dtype pair and UTC completion time. A new attempt invalidates
+dirty status, selected dtype modes and UTC completion time. A new attempt invalidates
 old success before dependency setup when the record exists; failures leave
 `building` or `failed`. Old HTML may remain but is uncertified. Do not edit
 sources or run concurrent builds during verification. Dirty status is not a
 snapshot; untracked content edits and edits after completion require a rebuild.
-The record covers both dtype outputs, regardless of which one a portal serves.
+The record covers only the listed modes. Unselected old HTML may remain and
+is not certified by a single-mode run. Use the default command to certify both.
 
 For agent browser/screenshots and sandbox troubleshooting, see
 [contributor inspection guidance](CONTRIBUTING_DOCS.md). Structural HTML checks

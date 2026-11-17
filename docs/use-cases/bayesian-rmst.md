@@ -143,7 +143,7 @@ the horizon.
 
 ## The likelihood as a NumPyro factor
 
-We define a model in NumpPyro that samples the
+We define a model in NumPyro that samples the
 three parameters on the log scale, builds the survjax survival distribution,
 and adds the per-patient log likelihood to the target with `numpyro.factor`:
 
@@ -161,9 +161,35 @@ def model(data, arm):
 
 The full model is in
 {download}`model.py <../../examples/bayesian_rmst/model.py>`. The factor
-receives the vector of 300 terms, one per patient, inside the observation
-plate, which tells NumPyro that the terms are conditionally independent
-and can speed up with vectorization.
+receives a `(300,)` vector, one term per patient. JAX array operations already
+evaluate this likelihood over all patients. The plate records conditional
+independence and the observation axis for NumPyro's shape and subsampling
+bookkeeping; it does not vectorize this existing calculation.
+
+Keep the per-patient vector inside the plate. For example, if three patients
+contribute `[-1, -2, -3]`, NumPyro reduces these to `-6` in the joint log
+density. Passing `.sum()` **inside** a size-three plate broadcasts the scalar
+`-6` to three entries, contributing `-18`: the likelihood is counted three
+times. For full-data inference, a summed factor **outside** the plate is
+equivalent to the vector factor inside it:
+
+```python
+# Alternative full-data factor, outside any observation plate:
+numpyro.factor("survival", survival.log_likelihood(data).sum())
+```
+
+The vector form preserves the observation structure. With a subsampled plate,
+use its indices explicitly: `with numpyro.plate("observations", N,
+subsample_size=B) as idx:`, then construct the distribution using `arm[idx]`
+(or `X[idx]`) and pass `data[idx]` to `log_likelihood`. The factor must have
+shape `(B,)`. NumPyro supplies the `N / B` scale; do not apply it again in
+survjax. This is guidance for inference methods supporting minibatches, such
+as SVI; the NUTS example here uses the full dataset. See
+[NumPyro's plate documentation](https://num.pyro.ai/en/stable/primitives.html#plate).
+
+If translating the baseline to NumPyro, use
+`distributions.Weibull(scale=b0, concentration=k)`: NumPyro's positional order
+is scale, shape; survjax's is shape, scale. Keywords make the mapping explicit.
 
 NumPyro then samples the posterior with NUTS. We run four chains of 1,000 warmup
 and 1,000 retained draws each, and collect the draws of all chains:
@@ -187,6 +213,11 @@ a distribution with array-valued parameters is a batch of distributions,
 so we can create one distribution with the draws and treatment arm ($a=0, a=1$)
 and get batch shape (draw, arm). The cells below run on the 4,000 draws of the
 committed full run:
+
+`get_samples()` flattens chains into the draw axis; retain chain-grouped draws
+for convergence diagnostics. Adding `[:, None]` changes each parameter from
+`(S,)` to `(S, 1)`, leaving room to broadcast over the two arms. Columns 0 and
+1 always mean control and treatment. Neither axis represents patients.
 
 ```{code-cell} ipython3
 :tags: [remove-input]
@@ -217,20 +248,14 @@ draw, keep the two arms of a draw paired, and summarize only at the end: the
 posterior mean, credible interval and $P(\Delta\mathrm{RMST}(5)>0)$ are all
 summaries of the 4,000 values in `delta5`.
 
-The same quantities can also be declared inside the model, as deterministic
-sites. A flag keeps them out of the sampler, where they are not needed, and
-NumPyro's `Predictive` fills them in afterwards for every posterior draw:
+Optionally, the full `model.py` declares the same quantities as deterministic
+sites outside the observation plate. Its `compute_rmst=False` default keeps
+them out of NUTS; `Predictive` fills them afterwards for each posterior draw.
+From the repository root, use the full model:
 
 ```python
-def model(data, arm, compute_rmst=False, tau=5.0, tau_grid=None):
-    ...  # priors and likelihood factor as above
-    if compute_rmst:
-        per_arm = survjax.ProportionalHazards(
-            baseline=base, log_hazard_ratio=gamma * jnp.array([0.0, 1.0])
-        )
-        numpyro.deterministic("rmst_tau", per_arm.rmst(tau))  # (2,)
-        numpyro.deterministic("rmst_curve", per_arm.rmst(tau_grid[:, None]))  # (m, 2)
-
+from numpyro.infer import Predictive
+from examples.bayesian_rmst.model import model
 
 predictive = Predictive(model, posterior_samples=samples)
 sites = predictive(jax.random.key(0), data, arm, compute_rmst=True, tau_grid=tau_grid)
@@ -238,8 +263,10 @@ sites["rmst_tau"]  # (S, 2), the same values as rmst5 above
 ```
 
 This route is convenient when the summaries belong with the model, for
-example to store them with the draws. The example computes both and checks
-that they agree to within $10^{-13}$ years.
+example to store them with the draws. Its `rmst_curve` has shape `(S, horizon,
+2)`, because `Predictive` prepends draws; swap axes 0 and 1 to compare with
+the batched route's `(horizon, S, 2)`. The committed run's maximum difference
+over both RMST routes was below $10^{-13}$ years.
 
 ## Results
 
@@ -295,8 +322,11 @@ plt.show()
 ```
 
 Putting the horizons on a leading axis evaluates RMST for every horizon, draw
-and arm at once. The grid runs to 13 years, about the 90th percentile of
-follow-up:
+and arm at once: `tau_grid[:, None, None]` has shape `(horizon, 1, 1)` and
+broadcasts against `(S, 2)`. `survival_grid(times)` adds a leading time axis
+automatically, giving `(time, S, 2)`. In both cases, quantiles over `axis=1`
+summarize draws at each time and arm. The grid runs to 13 years, about the
+90th percentile of follow-up:
 
 ```{code-cell} ipython3
 rmst_curve = posterior.rmst(tau_grid[:, None, None])     # (horizon, S, 2)
@@ -323,9 +353,19 @@ from the same draws. See the [proportional hazards](../proportional-hazards.md),
 
 ## Reproduce
 
-To work through the analysis interactively, open the notebook from the
-repository root, then **Restart Kernel and Run All Cells** in a fresh Python 3
-kernel. It samples the posterior in a few seconds:
+The downloadable notebook can run from any directory without a repository
+checkout. It imports installed dependencies only and spells out the short
+synthetic trial draw using the shared generator's key and recorded calibrated
+censoring limit. An example check verifies that its times, event indicators,
+arms and censoring limit match the shared generator exactly.
+
+Use a Python 3.12 environment with `survjax==0.0.1a3`, `numpyro==0.22.0`,
+`matplotlib==3.11.2`, `jupyterlab==4.6.4` and `ipykernel==7.4.0`, the versions
+used for the notebook check. The checked JAX and NumPy versions are 0.11.2
+and 2.5.3. Open the notebook in Jupyter, then **Restart Kernel and Run All
+Cells**; the setup cell enables float64 before generating the trial.
+
+Alternatively, from the repository root, use the locked environment:
 
 ```bash
 uv run --group docs --group examples jupyter lab examples/bayesian_rmst/bayesian-rmst.ipynb
@@ -345,8 +385,14 @@ The run takes about ten seconds on a laptop CPU and writes to a new directory.
 It also checks that the likelihood factor is wired correctly, that the two
 RMST routes agree, that the chains converged, and that the true hazard ratio
 and $\Delta\mathrm{RMST}(5)$ lie inside their 95% credible intervals. The
-example runs in float64 and needs only the optional `examples` dependencies;
-survjax itself does not depend on NumPyro.
+runner and notebook use float64 to reproduce the committed simulated trial
+and its numerical checks. Float64 is not a general requirement of the Weibull
+model or factor integration. The runner still uses the shared `make_trial()`
+helper, which raises `RuntimeError` if float64 is disabled to protect that
+reproduction; the standalone notebook enables float64 in its setup cell.
+The notebook uses a different NUTS key from the runner, so use the
+runner to reproduce the committed posterior. The runner needs only the optional
+`examples` dependencies; survjax itself does not depend on NumPyro.
 
 ## References
 

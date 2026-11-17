@@ -27,3 +27,32 @@ agreement of the two RMST routes, the convergence diagnostics and that the true
 hazard ratio and ΔRMST(5) lie inside their 95% credible intervals; it saves its
 results before checking. survjax itself does not depend on the `examples`
 group.
+
+Use float64 to reproduce the committed trial and its numerical checks; it is
+not a general requirement of the Weibull model or the NumPyro factor. The
+shared `make_trial()` helper raises `RuntimeError` if float64 is disabled to
+protect that reproduction. The notebook uses a different NUTS key, so use the
+runner for the committed posterior.
+
+The factor takes the `(N,)` per-patient likelihood inside the observation plate.
+The array calculation is already vectorized. The plate records independence
+and shapes and supplies scaling when subsampling. Summing inside that plate
+broadcasts the total back to `N` entries and counts the likelihood `N` times;
+a summed factor outside the plate is equivalent for full-data inference.
+For minibatches, explicitly index both `data[idx]` and `arm[idx]` before
+evaluating the likelihood; NumPyro supplies `N / batch_size` scaling.
+The NUTS runner uses full data.
+
+The notebook can be copied to any directory and run without a checkout or
+repository imports. Use Python 3.12 with `survjax==0.0.1a3`,
+`numpyro==0.22.0`, `matplotlib==3.11.2`, `jupyterlab==4.6.4` and
+`ipykernel==7.4.0`; the notebook check used JAX 0.11.2 and NumPy 2.5.3.
+Open it in Jupyter, then **Restart Kernel and Run All Cells**. Its setup cell
+enables float64. The short local trial draw uses the shared generator's key
+and recorded calibrated censoring limit; an optional check verifies exact
+agreement. The command-line runner still needs a checkout and uses the shared
+generator. From the repository root, run the notebook and reproduction checks:
+
+```sh
+uv run --group docs --group examples --group test pytest -q tests/unit/check_bayesian_run.py
+```
