@@ -12,10 +12,6 @@ the stromal radiomic score is a fictional biomarker.
   distribution (`UniformFollowUp`).
 - `analysis.py`: the propensity and outcome models, the estimators, the
   one-argument `analyse(data)` and the vmapped `bootstrap`.
-- `analysis.R`: the same analysis in R (`glm` and `survreg`), function by
-  function, for the benchmark.
-- `export_cohort.py`: writes a simulated cohort to CSV for R.
-- `benchmark/`: the survjax versus R timings and their results.
 
 From the repository root:
 

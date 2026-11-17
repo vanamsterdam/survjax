@@ -1,6 +1,5 @@
 """Optional: AIPTW tutorial checks (JAX_ENABLE_X64=1 uv run --group examples pytest -q this-file)."""
 
-import json
 import sys
 from pathlib import Path
 
@@ -14,7 +13,7 @@ import survjax
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from examples.aiptw_rmst import analysis  # noqa: E402
-from examples.aiptw_rmst.cohort import Cohort, resample, simulate_cohort  # noqa: E402
+from examples.aiptw_rmst.cohort import resample, simulate_cohort  # noqa: E402
 from examples.aiptw_rmst.follow_up import FOLLOW_UP, UniformFollowUp  # noqa: E402
 
 KEY = jax.random.PRNGKey(1)
@@ -99,40 +98,3 @@ def test_vmapped_bootstrap_matches_a_loop():
     for b, idx in enumerate(indices):
         single = analysis.analyse(resample(cohort, idx))
         np.testing.assert_allclose(batched.aiptw[b], single.aiptw, rtol=1e-8)
-
-
-FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "aiptw_rmst"
-
-
-def read_fixture_cohort():
-    """The committed CSV of export_cohort.py, as a Cohort."""
-    table = jnp.asarray(np.loadtxt(FIXTURE / "cohort.csv", delimiter=",", skiprows=1))
-    survival = survjax.SurvivalData(table[:, 0], event=table[:, 1] == 1)
-    return table, Cohort(survival, table[:, 2], table[:, 3:])
-
-
-def test_r_fixture_cohort_is_the_tutorial_cohort():
-    """The CSV holds simulate_cohort(PRNGKey(1) data key) at 17 significant digits."""
-    table, _ = read_fixture_cohort()
-    data_key, _ = jax.random.split(KEY)
-    cohort = simulate_cohort(data_key, n=500)
-    expected = np.column_stack(
-        [
-            cohort.survival.lower,
-            cohort.survival.exact,
-            cohort.treated,
-            cohort.covariates,
-        ]
-    )
-    np.testing.assert_array_equal(table, expected)  # %.17g round-trips float64
-
-
-def test_analysis_matches_r_survreg_on_the_same_cohort():
-    """survjax + NumPyro + optimistix against glm + survreg (generate_aiptw_r_estimates.R)."""
-    _, cohort = read_fixture_cohort()
-    estimates = analysis.analyse(cohort)
-    expected = json.loads((FIXTURE / "r_estimates.json").read_text())
-    for name in ("naive", "g_formula", "iptw", "aiptw"):
-        # Both optimisers converge far below this (observed: 1e-9 relative);
-        # it is the project float64 rtol, not a loosened one.
-        np.testing.assert_allclose(getattr(estimates, name), expected[name], rtol=1e-8)

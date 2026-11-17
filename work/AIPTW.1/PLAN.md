@@ -40,3 +40,19 @@
 
 - The tutorial page is unchanged. Whether the benchmark belongs on the page is
   for the maintainer to decide.
+
+## Withdrawn
+
+The maintainer withdrew this step after round 4: "let's skip this entire R
+comparison and just keep it to the survjax code with the default optimistix
+bfgs solver; these benchmark investigations will have to come later".
+
+- **The cleanup commit removes every file this step added** and restores
+  `tests/unit/check_aiptw.py` and `examples/aiptw_rmst/README.md` to their
+  versions at `c5a680e`.
+- **For the later benchmark work,** the last commit with the benchmark is
+  `83cbe8e`. It holds the R port, the benchmark scripts, the fixture and the
+  results README; its "survreg's starting values" section has the Newton
+  findings.
+- **The cleaned-up saddle-free Newton solver** was shown to the maintainer
+  in the conversation and is not committed anywhere.
