@@ -67,12 +67,14 @@ ignore = ["E501"]
 "examples/survival_mnist/survival-mnist.ipynb" = ["E402"]
 "examples/bayesian_rmst/bayesian-rmst.ipynb" = ["E402"]
 "examples/weibull_simulation/weibull-simulation.ipynb" = ["E402"]
+"examples/aiptw_rmst/aiptw-rmst.ipynb" = ["E402"]
 
 [tool.ruff.format]
 exclude = [
   "examples/survival_mnist/survival-mnist.ipynb",
   "examples/bayesian_rmst/bayesian-rmst.ipynb",
   "examples/weibull_simulation/weibull-simulation.ipynb",
+  "examples/aiptw_rmst/aiptw-rmst.ipynb",
 ]
 
 [tool.mypy]

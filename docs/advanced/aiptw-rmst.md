@@ -33,7 +33,10 @@ Administrative censoring is a **custom survjax distribution** of a few
 lines. We will write the whole analysis as one pure function of the data,
 so we can run the entire analysis on 1,000 bootstrap resamples in seconds
 with a single `jax.vmap`.
-The data are simulated, so we know the true answer.
+The data are simulated, so we know the true answer. The same tutorial is
+available as a
+{download}`runnable Jupyter notebook <../../examples/aiptw_rmst/aiptw-rmst.ipynb>`,
+which defines every analysis function in its own cell.
 
 ```{code-cell} ipython3
 :tags: [remove-input]
@@ -183,7 +186,7 @@ print(f"propensity scores from {propensity.min():.2f} to {propensity.max():.2f}"
 :tags: [remove-input]
 fig, ax = plt.subplots(figsize=(6, 3))
 bins = np.linspace(0, 1, 26)
-for a, (label, color) in enumerate(zip(ARMS, COLORS)):
+for a, (label, color) in enumerate(zip(ARMS, COLORS, strict=True)):
     ax.hist(propensity[data.treated == a], bins=bins, alpha=0.6, color=color, label=label)
 ax.set(xlabel="estimated probability of chemotherapy", ylabel="patients")
 ax.legend(frameon=False)
@@ -395,7 +398,7 @@ g-formula RMST:
 :tags: [remove-input]
 times = jnp.linspace(0.0, 8.0, 161)
 fig, ax = plt.subplots(figsize=(6, 3.5))
-for a, (label, color) in enumerate(zip(ARMS, COLORS)):
+for a, (label, color) in enumerate(zip(ARMS, COLORS, strict=True)):
     fitted = weibull_ph(outcome_theta, outcome_design_matrix(float(a), data.covariates))
     true_curve = true_death_model(data.covariates, float(a)).survival_grid(times).mean(axis=1)
     curve = fitted.survival_grid(times).mean(axis=1)  # (161, 500) -> (161,)
