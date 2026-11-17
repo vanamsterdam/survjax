@@ -71,6 +71,46 @@ unless a row says otherwise. The times are warm, with compilation excluded.
   them. With 100 replicates per process, the time grows from 0.39 s with 1
   process to 0.43, 0.69, 1.42 and 2.11 s with 2, 4, 8 and 12 processes.
 
+## Damped Newton solvers
+
+optimistix composes minimisers from a descent and a search. Following its
+[searches page](https://docs.kidger.site/optimistix/api/searches/introduction/),
+two variants of `minimise` were tried in a scratch script. Both used the
+same tolerances as BFGS, on 1,200 replicates of 500 patients:
+
+- **Damped BFGS:** an `optx.AbstractBFGS` subclass with
+  `descent=optx.DampedNewtonDescent()`, `search=optx.ClassicalTrustRegion()`
+  and `use_inverse=False`. It keeps the BFGS Hessian approximation.
+- **Trust-region Newton:** an `optx.AbstractQuasiNewton` subclass with the
+  same descent and search. Its `update_hessian` returns the exact
+  `jax.hessian` of the objective, as survreg's Newton–Raphson uses the exact
+  Hessian.
+
+| Solver | Steps per fit, median (propensity, outcome, naive) | 1,200 replicates, wall | CPU time |
+| --- | --- | --- | --- |
+| BFGS + backtracking (the tutorial) | 63, 78, 45 | 4.1 s | 23 s |
+| Damped BFGS + trust region | 47, 59, 42 | 3.2 s | 18 s |
+| Exact-Hessian Newton + trust region | 31, 31, 26 | 5.4 s | 47 s |
+
+- **All three agree.** Every replicate converged, and the AIPTW ΔRMST of
+  each replicate agrees with BFGS to about 1e-8.
+- **Damped BFGS is about 25% faster** on the bootstrap. That is still slower
+  than R, which takes 3.9 s on one core.
+- **The exact Hessian halves the number of steps but costs more than it
+  saves.** Each `jax.hessian` of a 7-parameter likelihood costs about seven
+  gradient evaluations.
+- **The trust region needs more steps than survreg.** It rejects about a
+  third of its trial steps: 11 of 16 accepted for the propensity fit and 14
+  of 18 for the outcome fit, on the full cohort.
+  - For comparison, plain Newton with step halving fits the logistic model
+    in 5 iterations.
+  - It stalls on the Weibull model from the tutorial's starting point, where
+    the Hessian is not positive definite. survreg avoids this with a better
+    starting point.
+- **So the gap with R is the iteration count, not the language.** Closing it
+  would take survreg-style starting values and Newton steps, not a different
+  optimistix component.
+
 ## Reading the results
 
 **On CPU, JAX does not pay off for this analysis.**

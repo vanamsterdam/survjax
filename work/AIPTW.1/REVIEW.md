@@ -67,3 +67,16 @@ README, under "Other ways to spread the replicates".
   busy, so the "1 device" column is not single-core. The README now says so.
 
 The scratch scripts are not committed.
+
+## Round 3: damped Newton (maintainer request)
+
+The two solver variants and their results are in the benchmark README,
+under "Damped Newton solvers".
+
+- **Damped BFGS** (`DampedNewtonDescent` with `ClassicalTrustRegion` on
+  `AbstractBFGS`) is about 25% faster.
+- **Exact-Hessian trust-region Newton** needs fewer steps but is slower
+  overall, because of the cost of the Hessian.
+- **Neither reaches R.**
+
+The tutorial's `minimise` is unchanged; the scratch script is not committed.
